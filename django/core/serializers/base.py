@@ -1,140 +1,70 @@
 """
 Module for abstract serializer/unserializer base classes.
 """
-
-from io import BytesIO
-
+from django.utils.datastructures import SortedDict
 from django.db import models
-from django.utils.encoding import smart_unicode
+
 
 class SerializerDoesNotExist(KeyError):
     """The requested serializer was not found."""
     pass
 
+
 class SerializationError(Exception):
     """Something bad happened during serialization."""
     pass
+
 
 class DeserializationError(Exception):
     """Something bad happened during deserialization."""
     pass
 
-class Serializer(object):
+
+def get_declared_fields(bases, attrs, with_base_fields=True):
     """
-    Abstract serializer base class.
+    Create a list of serializer field instances from the passed in 'attrs', plus any
+    similar fields on the base classes (in 'bases').
     """
+    fields = [(field_name, attrs.pop(field_name)) for field_name, obj in attrs.items() if isinstance(obj, BaseSerializer)]
+    fields.sort(key=lambda x: x[1].creation_counter)
 
-    # Indicates if the implemented serializer is only available for
-    # internal Django use.
-    internal_use_only = False
+    # If this class is subclassing another Serializer, add that Serializer's fields.
+    # Note that we loop over the bases in *reverse*. This is necessary in
+    # order to preserve the correct order of fields.
+    for base in bases[::-1]:
+        if hasattr(base, 'base_fields'):
+            fields = base.base_fields.items() + fields
 
-    def serialize(self, queryset, **options):
-        """
-        Serialize a queryset.
-        """
-        self.options = options
+    return SortedDict(fields)
 
-        self.stream = options.pop("stream", BytesIO())
-        self.selected_fields = options.pop("fields", None)
-        self.use_natural_keys = options.pop("use_natural_keys", False)
 
-        self.start_serialization()
-        for obj in queryset:
-            self.start_object(obj)
-            # Use the concrete parent class' _meta instead of the object's _meta
-            # This is to avoid local_fields problems for proxy models. Refs #17717.
-            concrete_model = obj._meta.concrete_model
-            for field in concrete_model._meta.local_fields:
-                if field.serialize:
-                    if field.rel is None:
-                        if self.selected_fields is None or field.attname in self.selected_fields:
-                            self.handle_field(obj, field)
-                    else:
-                        if self.selected_fields is None or field.attname[:-3] in self.selected_fields:
-                            self.handle_fk_field(obj, field)
-            for field in concrete_model._meta.many_to_many:
-                if field.serialize:
-                    if self.selected_fields is None or field.attname in self.selected_fields:
-                        self.handle_m2m_field(obj, field)
-            self.end_object(obj)
-        self.end_serialization()
-        return self.getvalue()
+class SerializerMetaclass(type):
+    def __new__(cls, name, bases, attrs):
+        attrs['base_fields'] = get_declared_fields(bases, attrs)
+        return super(SerializerMetaclass,
+                     cls).__new__(cls, name, bases, attrs)
 
-    def start_serialization(self):
-        """
-        Called when serializing of the queryset starts.
-        """
-        raise NotImplementedError
 
-    def end_serialization(self):
-        """
-        Called when serializing of the queryset ends.
-        """
-        pass
+class BaseSerializer(object):
+    pass
+   
 
-    def start_object(self, obj):
-        """
-        Called when serializing of an object starts.
-        """
-        raise NotImplementedError
+class Serializer(BaseSerializer): 
+    __metaclass__ = SerializerMetaclass
 
-    def end_object(self, obj):
-        """
-        Called when serializing of an object ends.
-        """
-        pass
 
-    def handle_field(self, obj, field):
-        """
-        Called to handle each individual (non-relational) field on an object.
-        """
-        raise NotImplementedError
+class Field(Serializer): 
+    pass
+    
 
-    def handle_fk_field(self, obj, field):
-        """
-        Called to handle a ForeignKey field.
-        """
-        raise NotImplementedError
+class ObjectSerializer(Serializer):
+    pass
 
-    def handle_m2m_field(self, obj, field):
-        """
-        Called to handle a ManyToManyField.
-        """
-        raise NotImplementedError
 
-    def getvalue(self):
-        """
-        Return the fully serialized queryset (or None if the output stream is
-        not seekable).
-        """
-        if callable(getattr(self.stream, 'getvalue', None)):
-            return self.stream.getvalue()
+class ModelSerializer(ObjectSerializer): 
+    pass
 
-class Deserializer(object):
-    """
-    Abstract base deserializer class.
-    """
 
-    def __init__(self, stream_or_string, **options):
-        """
-        Init this serializer given a stream or a string
-        """
-        self.options = options
-        if isinstance(stream_or_string, basestring):
-            self.stream = BytesIO(stream_or_string)
-        else:
-            self.stream = stream_or_string
-        # hack to make sure that the models have all been loaded before
-        # deserialization starts (otherwise subclass calls to get_model()
-        # and friends might fail...)
-        models.get_apps()
-
-    def __iter__(self):
-        return self
-
-    def next(self):
-        """Iteration iterface -- return the next item in the stream"""
-        raise NotImplementedError
 
 class DeserializedObject(object):
     """
