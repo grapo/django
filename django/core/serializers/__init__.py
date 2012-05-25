@@ -18,7 +18,7 @@ To add your own serializers, use the SERIALIZATION_MODULES setting::
 
 from django.conf import settings
 from django.utils import importlib
-from django.core.serializers.base import SerializerDoesNotExist
+from django.core.serializers.base import SerializerDoesNotExist, ModelSerializer
 
 # Built-in serializers
 BUILTIN_SERIALIZERS = {
@@ -69,8 +69,15 @@ def get_serializer(format):
     if not _serializers:
         _load_serializers()
     if format not in _serializers:
-        raise SerializerDoesNotExist(format)
+        return ModelSerializer
     return _serializers[format].Serializer
+
+def get_format_serializer(format):
+    if not _serializers:
+        _load_serializers()
+    if format not in _serializers:
+        raise SerializerDoesNotExist(format)
+    return _serializers[format].NativeFormat
 
 def get_serializer_formats():
     if not _serializers:
@@ -86,27 +93,34 @@ def get_deserializer(format):
     if not _serializers:
         _load_serializers()
     if format not in _serializers:
-        raise SerializerDoesNotExist(format)
-    return _serializers[format].Deserializer
+        return ModelSerializer
+    return _serializers[format].Serializer
 
-def serialize(format, queryset, **options):
+def serialize(format, queryset, serializer=None,  **options):
     """
     Serialize a queryset (or any iterator that returns database objects) using
     a certain serializer.
     """
-    s = get_serializer(format)()
-    s.serialize(queryset, **options)
-    return s.getvalue()
+    # TODO What to do with **options. Should not pass them everywhere
+    if serializer is None:
+        s = get_serializer(format)(**options)
+    format_serializer = get_format_serializer(format)(**options)
+    
+    native_objs = s.serialize(queryset, **options)
+    return format_serializer.serialize(native_objs, **options)
 
-def deserialize(format, stream_or_string, **options):
+def deserialize(format, stream_or_string, deserializer=None, **options):
     """
     Deserialize a stream or a string. Returns an iterator that yields ``(obj,
     m2m_relation_dict)``, where ``obj`` is a instantiated -- but *unsaved* --
     object, and ``m2m_relation_dict`` is a dictionary of ``{m2m_field_name :
     list_of_related_objects}``.
     """
-    d = get_deserializer(format)
-    return d(stream_or_string, **options)
+    if deserializer is None:
+        d = get_serializer(format)(**options)
+    format_deserializer = get_format_serializer(format)(**options)
+    native_objs = format_deserializer.deserialize(stream_or_string, **options)
+    return d.deserialize(native_objs, **options)
 
 def _load_serializers():
     """
