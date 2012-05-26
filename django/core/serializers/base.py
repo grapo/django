@@ -1,9 +1,26 @@
 """
 Module for abstract serializer/unserializer base classes.
 """
+
+import datetime
+from decimal import Decimal
+
 from django.utils.datastructures import SortedDict
 from django.db import models
 
+def is_protected_type(obj):
+    """Determine if the object instance is of a protected type.
+
+    Objects of protected types are preserved as-is when passed to
+    force_unicode(strings_only=True).
+    """
+    return isinstance(obj, (
+        type(None),
+        int, long,
+        datetime.datetime, datetime.date, datetime.time,
+        float, Decimal,
+        basestring)
+    )
 
 class SerializerDoesNotExist(KeyError):
     """The requested serializer was not found."""
@@ -45,8 +62,98 @@ class SerializerMetaclass(type):
                      cls).__new__(cls, name, bases, attrs)
 
 
+def make_options(options, meta, **kwargs):
+    for name in options.__dict__:
+        attr = kwargs.get(name, getattr(meta, name, None))
+        if attr:
+            setattr(options, name, attr)
+    return options
+
+class SerializerOptions(object):
+    def __init__(self):
+        self.fields = ()
+        self.exclude = ()
+        self.related_serializer = None
+        self.field_serializer = Field
+        self.related_reserialize = None
+        self.include_default_fields = True
+        self.follow_object = True
+        self.model_fields = ['pk', 'fields', 'related_fields']
+
 class BaseSerializer(object):
-    pass
+    class Meta:
+        pass
+
+    _options_class=SerializerOptions
+
+    def __init__(self, **kwargs):
+        self.label = kwargs.get('label', None)
+        self.attribute = kwargs.get('attribute', None)
+        self.opts = make_options(self._options_class(), self.Meta, **kwargs)
+
+
+    def get_object(self, obj, field_name):
+        if field_name is not None:
+            if  self.opts.follow_object and hasattr(obj, field_name):
+                return getattr(obj, field_name)
+        return obj
+
+    def proper_type(self, f):
+        # check if field can be serialized because type is in self.opts.model_fields
+        return True
+
+    def get_obj_fields(self, obj):
+        return obj.__dict__.keys()
+
+    def get_fields_for_object(self, obj):
+        fields = {}
+        if self.opts.include_default_fields:
+            for f in self.get_obj_fields(obj):
+                if f not in self.opts.exclude and self.proper_type(f):
+                    fields.setdefault(f, None)
+        fields.update(dict.fromkeys(self.opts.fields))
+        fields.update(self.base_fields)
+        return fields            
+
+    def get_serializer_for_field(self, f):
+        return self.opts.field_serializer()
+
+    def add_serializers(self, fields):
+        # each field must have serializer for it
+        for f in fields.keys():
+            if fields[f] == None:
+                fields[f] =  self.get_serializer_for_field(f)
+
+    def get_native_from_object(self, obj, fields):
+        native = {'__attributes__' : {}}
+        for field_name, serializer in fields.iteritems():
+            nativ_obj = serializer.serialize(obj, field_name)
+            if serializer.label:
+                field_name = serializer.label
+            if serializer.attribute:
+                native['__attributes__'][field_name] = nativ_obj
+            else:
+                native[field_name] = nativ_obj
+        return native
+
+    def serialize_iterable(self, obj, **options):
+        for item in obj:
+            yield self.serialize(item, **options)
+
+    def serialize(self, obj, field_name=None, **options):
+        if is_protected_type(obj):
+            return obj
+        elif hasattr(obj, '__iter__'):
+            return self.serialize_iterable(obj, **options)
+        else:
+            obj = self.get_object(obj, field_name)
+            fields = self.get_fields_for_object(obj)
+            self.add_serializers(fields)
+            return self.get_native_from_object(obj, fields)
+
+
+               
+
    
 
 class Serializer(BaseSerializer): 
@@ -54,7 +161,31 @@ class Serializer(BaseSerializer):
 
 
 class Field(Serializer): 
-    pass
+    
+    def get_object(self, obj, field_name):
+        return obj
+
+    def get_fields_for_object(self, obj):
+        return self.base_fields
+
+    def serialize(self, obj, field_name):
+        native_datatype = super(Serializer, self).serialize(obj, field_name) 
+        new_name = self.field_name(obj, field_name)
+        if new_name is None:
+            if len(native_datatype.keys()) < 2: # only __attributes__ key
+                return self.serialized_value(obj, field_name)
+            else:
+                raise Exception("No name")
+        else:
+            native_datatype[new_name] = self.serialized_value(obj, field_name)
+        return native_datatype
+    
+
+    def serialized_value(self, obj, field_name):
+        return getattr(obj, field_name)
+
+    def field_name(self, obj, field_name):
+        return None
     
 
 class ObjectSerializer(Serializer):
