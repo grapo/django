@@ -103,8 +103,8 @@ def serialize(format, queryset, serializer=None,  **options):
     """
     # TODO What to do with **options. Should not pass them everywhere
     if serializer is None:
-        s = get_serializer(format)(**options)
-    format_serializer = get_format_serializer(format)(**options)
+        s = get_serializer(format)()
+    format_serializer = get_format_serializer(format)()
     
     native_objs = s.serialize(queryset, **options)
     return format_serializer.serialize(native_objs, **options)
@@ -117,8 +117,8 @@ def deserialize(format, stream_or_string, deserializer=None, **options):
     list_of_related_objects}``.
     """
     if deserializer is None:
-        d = get_serializer(format)(**options)
-    format_deserializer = get_format_serializer(format)(**options)
+        d = get_serializer(format)()
+    format_deserializer = get_format_serializer(format)()
     native_objs = format_deserializer.deserialize(stream_or_string, **options)
     return d.deserialize(native_objs, **options)
 
