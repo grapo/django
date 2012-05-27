@@ -36,6 +36,7 @@ except ImportError:
 
 _serializers = {}
 
+
 def register_serializer(format, serializer_module, serializers=None):
     """Register a new serializer.
 
@@ -57,6 +58,7 @@ def register_serializer(format, serializer_module, serializers=None):
     else:
         serializers[format] = module
 
+
 def unregister_serializer(format):
     "Unregister a given serializer. This is not a thread-safe operation."
     if not _serializers:
@@ -65,12 +67,14 @@ def unregister_serializer(format):
         raise SerializerDoesNotExist(format)
     del _serializers[format]
 
+
 def get_serializer(format):
     if not _serializers:
         _load_serializers()
     if format not in _serializers:
         return ModelSerializer
     return _serializers[format].Serializer
+
 
 def get_format_serializer(format):
     if not _serializers:
@@ -79,15 +83,18 @@ def get_format_serializer(format):
         raise SerializerDoesNotExist(format)
     return _serializers[format].NativeFormat
 
+
 def get_serializer_formats():
     if not _serializers:
         _load_serializers()
     return _serializers.keys()
 
+
 def get_public_serializer_formats():
     if not _serializers:
         _load_serializers()
     return [k for k, v in _serializers.iteritems() if not v.Serializer.internal_use_only]
+
 
 def get_deserializer(format):
     if not _serializers:
@@ -96,7 +103,8 @@ def get_deserializer(format):
         return ModelSerializer
     return _serializers[format].Serializer
 
-def serialize(format, queryset, serializer=None,  **options):
+
+def serialize(format, queryset, serializer=None, **options):
     """
     Serialize a queryset (or any iterator that returns database objects) using
     a certain serializer.
@@ -105,9 +113,10 @@ def serialize(format, queryset, serializer=None,  **options):
     if serializer is None:
         s = get_serializer(format)()
     format_serializer = get_format_serializer(format)()
-    
+
     native_objs = s.serialize(queryset, **options)
     return format_serializer.serialize(native_objs, **options)
+
 
 def deserialize(format, stream_or_string, deserializer=None, **options):
     """
@@ -121,6 +130,7 @@ def deserialize(format, stream_or_string, deserializer=None, **options):
     format_deserializer = get_format_serializer(format)()
     native_objs = format_deserializer.deserialize(stream_or_string, **options)
     return d.deserialize(native_objs, **options)
+
 
 def _load_serializers():
     """

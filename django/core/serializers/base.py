@@ -85,7 +85,7 @@ class BaseSerializer(object):
 
     def get_serializer_for_field(self, field_name):
         raise NotImplementedError()
-        
+
     def set_fields_serializers(self, fields):
         # each field must have serializer for it
         for f in fields.keys():
@@ -93,12 +93,12 @@ class BaseSerializer(object):
                 fields[f] = self.get_serializer_for_field(f)
 
     def get_native_from_object(self, obj, fields):
-        native = {'__attributes__' : {}}
+        native = {'__attributes__': {}}
         for field_name, serializer in fields.iteritems():
             nativ_obj = serializer.serialize(obj, field_name)
             if serializer.label:
                 field_name = serializer.label
-            
+
             if serializer.attribute:
                 native['__attributes__'][field_name] = nativ_obj
             else:
@@ -120,13 +120,13 @@ class BaseSerializer(object):
             self.set_fields_serializers(fields)
             return self.get_native_from_object(obj, fields)
 
-            
-class Serializer(BaseSerializer): 
+
+class Serializer(BaseSerializer):
     __metaclass__ = SerializerMetaclass
 
 
-class Field(Serializer): 
-    
+class Field(Serializer):
+
     def get_object(self, obj, field_name):
         return obj
 
@@ -137,20 +137,20 @@ class Field(Serializer):
         native_datatype = super(Serializer, self).serialize(obj, field_name)
         new_name = self.field_name(obj, field_name)
         if new_name is None:
-            if len(native_datatype.keys()) < 2: # only __attributes__ key
-                return self.serialized_value(obj, field_name) # TODO Bug: if field_name -> None then attributes 
-                                                              # are not returned
+            if len(native_datatype.keys()) < 2:  # only __attributes__ key
+                return self.serialized_value(obj, field_name)  # TODO Bug: if field_name -> None then attributes
+                                                               # are not returned
             raise SerializationError("field_name must be present if there are nasted Fields in Field")
         else:
             native_datatype[new_name] = self.serialized_value(obj, field_name)
         return native_datatype
-    
+
     def serialized_value(self, obj, field_name):
         return getattr(obj, field_name)
 
     def field_name(self, obj, field_name):
         return None
-    
+
 
 def make_options(options, meta, **kwargs):
     for name in options.__dict__:
@@ -173,18 +173,18 @@ class ObjectSerializerOptions(object):
 
 
 class ObjectSerializer(Serializer):
-    _options_class=ObjectSerializerOptions
+    _options_class = ObjectSerializerOptions
 
     def __init__(self, **kwargs):
         super(ObjectSerializer, self).__init__(**kwargs)
         self.opts = make_options(self._options_class(), self.Meta, **kwargs)
-    
+
     def get_serializer_for_field(self, field_name):
         return self.opts.field_serializer()
-    
+
     def get_object(self, obj, field_name):
         if field_name is not None:
-            if  self.opts.follow_object and hasattr(obj, field_name):
+            if self.opts.follow_object and hasattr(obj, field_name):
                 return getattr(obj, field_name)
         return obj
 
@@ -196,11 +196,10 @@ class ObjectSerializer(Serializer):
                     fields.setdefault(f, None)
         fields.update(dict.fromkeys(self.opts.fields))
         fields.update(self.base_fields)
-        return fields            
+        return fields
 
     def get_obj_default_fields(self, obj):
         return obj.__dict__.keys()
-
 
 
 class ModelSerializerOptions(ObjectSerializerOptions):
@@ -209,9 +208,9 @@ class ModelSerializerOptions(ObjectSerializerOptions):
         self.model_fields = ['pk', 'fields', 'related_fields']
 
 
-class ModelSerializer(ObjectSerializer): 
-    _options_class=ModelSerializerOptions
-    
+class ModelSerializer(ObjectSerializer):
+    _options_class = ModelSerializerOptions
+
     def get_obj_default_fields(self, obj):
         # TODO Take in account self.opts.model_fields types
         return obj.__dict__.keys()
