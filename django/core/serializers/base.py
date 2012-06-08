@@ -120,6 +120,46 @@ class BaseSerializer(object):
         return self.get_native_from_object(obj, fields)
 
 
+    def deserialize_iterable(self, obj, instance, field_name):
+        for item in obj:
+            yield self.deserialize(item, instance, field_name)
+
+    def deserialize(self, obj, instance=None, field_name=None):
+        if isinstance(obj, dict):
+            return self.deserialize_object(obj, instance, field_name)
+        if hasattr(obj, '__iter__'):
+            return self.deserialize_iterable(obj, instance, field_name)
+        else:
+            return self.deserialize_object(obj, instance, field_name)
+
+    def deserialize_object(self, obj, instance, field_name):
+        new_instance = self.create_instance() if self.follow_object else None
+        fields = self.get_fields_for_object(new_instance or instance)
+        return_instance = self.get_instance_from_native(obj, new_instance or instance, fields)
+        if self.follow_object:
+            setattr(instance, field_name, return_instance)
+        return instance
+
+    def get_instance_from_native(self, obj, instance, fields):
+        native, attributes = obj
+        for field_name, serializer in fields.iteritems():
+            serialized_name = serializer.label if serializer.label is not None else field_name
+
+            if serializer.attribute:
+                serializer.deserialize(attributes[serialized_name], instance, field_name)
+            else:
+                serializer.deserialize(native[serialized_name], instance, field_name)
+        return instance
+
+    def create_instance(self, obj, instance, field_name):
+        if self.opts.class_name is not None:
+            if isinstance(self.opts.class_name, str):
+                return object#class_from_string(self.opts.class_name)
+            else:
+                return self.opts.class_name
+        return object
+
+
 class Serializer(BaseSerializer):
     __metaclass__ = SerializerMetaclass
 
@@ -146,6 +186,15 @@ class Field(Serializer):
 
     def field_name(self, obj, field_name):
         return None
+
+
+    def deserialize(self, obj, instance=None, field_name=None):
+        super(Serializer, self).deserialize(obj, instance, field_name)
+
+    def deserialized_value(self, obj, instance, field_name):
+        fn = self.field_name(self, instance, field_name)
+        val = obj[fn] if fn else obj
+        setattr(instance, field_name, val)
 
 
 def make_options(options, **kwargs):
