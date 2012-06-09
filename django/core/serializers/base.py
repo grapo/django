@@ -5,8 +5,8 @@ import datetime
 from decimal import Decimal
 
 from django.utils.datastructures import SortedDict
+from django.db.models.loading import get_model
 from django.db import models
-
 
 def is_protected_type(obj):
     """Determine if the object instance is of a protected type.
@@ -75,7 +75,7 @@ class SerializerMetaclass(type):
 class BaseSerializer(object):
     creation_counter = 0
 
-    def __init__(self, label=None, follow_object=False, attribute=False):
+    def __init__(self, label=None, follow_object=True, attribute=False):
         self.label = label
         self.follow_object = follow_object
         self.attribute = attribute
@@ -108,9 +108,11 @@ class BaseSerializer(object):
 
     def serialize(self, obj, field_name=None):
         if is_protected_type(obj):
-            return obj
+            return (obj, {})
+        elif isinstance(obj, dict):
+            return (dict([(k, self.serialize_object(v, field_name)) for k,v in obj.items()] ), {})
         elif hasattr(obj, '__iter__'):
-            return self.serialize_iterable(obj)
+            return (self.serialize_iterable(obj), {})
         else:
             return self.serialize_object(obj, field_name)
 
@@ -119,83 +121,96 @@ class BaseSerializer(object):
         fields = self.get_fields_for_object(obj)
         return self.get_native_from_object(obj, fields)
 
-
     def deserialize_iterable(self, obj, instance, field_name):
         for item in obj:
             yield self.deserialize(item, instance, field_name)
 
     def deserialize(self, obj, instance=None, field_name=None):
-        if isinstance(obj, dict):
-            return self.deserialize_object(obj, instance, field_name)
-        if hasattr(obj, '__iter__'):
-            return self.deserialize_iterable(obj, instance, field_name)
-        else:
-            return self.deserialize_object(obj, instance, field_name)
-
-    def deserialize_object(self, obj, instance, field_name):
-        new_instance = self.create_instance() if self.follow_object else None
-        fields = self.get_fields_for_object(new_instance or instance)
-        return_instance = self.get_instance_from_native(obj, new_instance or instance, fields)
-        if self.follow_object:
-            setattr(instance, field_name, return_instance)
-        return instance
-
-    def get_instance_from_native(self, obj, instance, fields):
         native, attributes = obj
+        if not isinstance(native, dict) and hasattr(native, '__iter__'):
+            if instance is None:
+                return self.deserialize_iterable(native, instance, field_name)
+            else:
+                setattr(instance, field_name, self.deserialize_iterable(native, instance, field_name))
+                return instance
+
+        join_dict = dict(native.items() + attributes.items()) # keys in native are always diffrent than in attributes
+        
+        new_instance = self.get_instance(join_dict, instance) # possibly new_instance == instance
+        fields = self.get_fields_for_object(new_instance)
         for field_name, serializer in fields.iteritems():
             serialized_name = serializer.label if serializer.label is not None else field_name
-
             if serializer.attribute:
-                serializer.deserialize(attributes[serialized_name], instance, field_name)
+                new_instance = serializer.deserialize(attributes[serialized_name], new_instance, field_name)
             else:
-                serializer.deserialize(native[serialized_name], instance, field_name)
-        return instance
+                new_instance = serializer.deserialize(native[serialized_name], new_instance, field_name)
+        return new_instance
 
-    def create_instance(self, obj, instance, field_name):
-        if self.opts.class_name is not None:
-            if isinstance(self.opts.class_name, str):
-                return object#class_from_string(self.opts.class_name)
-            else:
-                return self.opts.class_name
-        return object
+    def get_instance(self, obj, instance):
+        if instance is None:
+            new_instance = self.create_instance(obj)
+        elif self.follow_object:
+            new_instance = self.create_instance(obj)
+        else:
+            new_instance = instance
+
+        return new_instance
+
+    def create_instance(self, obj):
+        raise NotImplementedError()
 
 
 class Serializer(BaseSerializer):
     __metaclass__ = SerializerMetaclass
 
 
-class Field(Serializer):
-    def __init__(self, label=None, follow_object=False, attribute=False):
+class FieldMetaclass(SerializerMetaclass):
+    """
+    Metaclass that converts Serializer attributes to a dictionary called
+    'base_fields', taking into account parent class 'base_fields' as well.
+    """
+    def __new__(cls, name, bases, attrs):
+        new_class = super(FieldMetaclass,
+                     cls).__new__(cls, name, bases, attrs)
+        for field in new_class.base_fields.itervalues():
+            if not field.attribute:
+                raise SerializerError("Field subfields must be attributes")
+        return new_class
+
+
+class BaseField(Serializer):
+    def __init__(self, label=None, attribute=False):
         if attribute and self.base_fields:
             raise SerializerError("Attribute Field can't have declared fields")
-        super(Field, self).__init__(label, follow_object, attribute)
+        super(BaseField, self).__init__(label, False, attribute)
 
     def serialize(self, obj, field_name):
         native, attributes = super(Serializer, self).serialize(obj, field_name)
-        new_name = self.field_name(obj, field_name)
-        if new_name is None:
-            if not native:  # only __attributes__ key
-                return (self.serialized_value(obj, field_name), attributes)
-            raise SerializationError("field_name must be present if there are nasted Fields in Field")
-        else:
-            native[new_name] = self.serialized_value(obj, field_name)
-        return (native, attributes)
+        assert native == {}
+        return (self.serialized_value(obj, field_name), attributes) # serialized_value can only return native datatype
+
+    def deserialize(self, obj, instance, field_name):
+        native, attributes = obj
+        self.deserialized_value(native, instance, field_name)
+        native, attributes = obj
+        fields = self.get_fields_for_object(instance)
+         
+        for field_name, serializer in fields.iteritems():
+            serialized_name = serializer.label if serializer.label is not None else field_name
+            if serializer.attribute:
+                instance = serializer.deserialize(attributes[serialized_name], instance, field_name)
+
+        return instance
 
     def serialized_value(self, obj, field_name):
         return getattr(obj, field_name)
 
-    def field_name(self, obj, field_name):
-        return None
-
-
-    def deserialize(self, obj, instance=None, field_name=None):
-        super(Serializer, self).deserialize(obj, instance, field_name)
-
     def deserialized_value(self, obj, instance, field_name):
-        fn = self.field_name(self, instance, field_name)
-        val = obj[fn] if fn else obj
-        setattr(instance, field_name, val)
+        setattr(instance, field_name, obj)
 
+
+class Field(BaseField):
+    __metaclass__ = FieldMetaclass
 
 def make_options(options, **kwargs):
     for name in options.__dict__:
@@ -212,6 +227,7 @@ class ObjectSerializerOptions(object):
         self.related_serializer = getattr(options, 'related_serializer', None)
         self.field_serializer = getattr(options, 'field_serializer', Field)
         self.related_reserialize = getattr(options, 'related_reserialize', None)
+        self.class_name = getattr(options, 'class_name', object)
 
 
 class ObjectSerializerMetaclass(SerializerMetaclass):
@@ -252,6 +268,14 @@ class BaseObjectSerializer(Serializer):
         fields.update(declared_fields)
         
         return fields
+    
+    def create_instance(self, obj):
+        if self.opts.class_name is not None:
+            if isinstance(self.opts.class_name, str):
+                return _get_model(obj[self.opts.class_name])()
+            else:
+                return self.opts.class_name()
+        raise DeserializationError(u"Can't resolve model")
 
 
 class ObjectSerializer(BaseObjectSerializer):
@@ -295,3 +319,16 @@ class DeserializedObject(object):
         # prevent a second (possibly accidental) call to save() from saving
         # the m2m data twice.
         self.m2m_data = None
+
+
+def _get_model(model_identifier):
+    """
+    Helper to look up a model from an "app_label.module_name" string.
+    """
+    try:
+        Model = models.get_model(*model_identifier.split("."))
+    except TypeError:
+        Model = None
+    if Model is None:
+        raise DeserializationError(u"Invalid model identifier: '%s'" % model_identifier)
+    return Model
