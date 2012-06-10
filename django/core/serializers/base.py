@@ -5,7 +5,6 @@ import datetime
 from decimal import Decimal
 
 from django.utils.datastructures import SortedDict
-from django.db.models.loading import get_model
 from django.db import models
 
 def is_protected_type(obj):
@@ -212,6 +211,7 @@ class BaseField(Serializer):
 class Field(BaseField):
     __metaclass__ = FieldMetaclass
 
+
 def make_options(options, **kwargs):
     for name in options.__dict__:
         attr = kwargs.get(name)
@@ -284,6 +284,15 @@ class ObjectSerializer(BaseObjectSerializer):
 
 class ModelSerializer(ObjectSerializer):
     pass
+
+
+class NativeFormat(object):
+    def serialize(self, objects, **options):
+        return objects
+
+    def deserialize(self, stream, **options):
+        return stream
+
 
 class DeserializedObject(object):
     """
