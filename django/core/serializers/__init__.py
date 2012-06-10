@@ -18,7 +18,11 @@ To add your own serializers, use the SERIALIZATION_MODULES setting::
 
 from django.conf import settings
 from django.utils import importlib
-from django.core.serializers.base import SerializerDoesNotExist, ModelSerializer
+from django.core.serializers.base import SerializerDoesNotExist
+from django.core.serializers.field import Field
+from django.core.serializers.native import ModelSerializer, ObjectSerializer
+
+__all__= ['Field', 'ModelSerializer', 'ObjectSerializer']
 
 # Built-in serializers
 BUILTIN_SERIALIZERS = {
