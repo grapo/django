@@ -14,7 +14,8 @@ from django.utils import unittest
 
 from .models import (Category, Author, Article, AuthorProfile, Actor, Movie,
     Score, Player, Team)
-
+from .serializers import (ArticleSerializer, CustomFieldsSerializer, AttributeSerializer,
+        LabelSerializer)
 
 class SerializerRegistrationTests(unittest.TestCase):
     def setUp(self):
@@ -66,6 +67,101 @@ class SerializerRegistrationTests(unittest.TestCase):
         self.assertIn('python', all_formats)
         self.assertNotIn('python', public_formats)
 
+class NativeSerializersTests(TestCase):
+    @staticmethod
+    def _validate_output(serial_python):
+        return isinstance(serial_python, tuple) and len(serial_python) == 2
+    
+    def setUp(self):
+        sports = Category.objects.create(name="Sports")
+        music = Category.objects.create(name="Music")
+        op_ed = Category.objects.create(name="Op-Ed")
+
+        self.joe = Author.objects.create(name="Joe")
+        self.jane = Author.objects.create(name="Jane")
+
+        self.a1 = Article(
+            author=self.jane,
+            headline="Poker has no place on ESPN",
+            pub_date=datetime(2006, 6, 16, 11, 00)
+        )
+        self.a1.save()
+        self.a1.categories = [sports, op_ed]
+        
+        self.a2 = Article(
+            author=self.joe,
+            headline="Time to reform copyright",
+            pub_date=datetime(2006, 6, 16, 13, 00, 11, 345)
+        )
+        self.a2.save()
+        self.a2.categories = [music, op_ed]
+
+    def test_serialize(self):
+        """Tests that basic serialization works."""
+        serializer = serializers.ObjectSerializer()
+        serial_python = serializer.serialize(Article.objects.all())
+        self.assertTrue(self._validate_output(serial_python))
+
+    def test_serialize_roundtrip(self):
+        """Tests that serialized content can be deserialized."""
+        serializer = ArticleSerializer()
+        serial_python = serializer.serialize(Article.objects.all())
+        objs = serializer.deserialize(serial_python)
+        self.assertEqual(len(list(objs)), 2)
+
+    def test_object_fields_serializer(self):
+        """Tests that serializer serialized object fields"""
+        serializer = ArticleSerializer()
+        native, attributes = serial_python = serializer.serialize(self.a1)
+
+        self.assertEqual(native['headline'][0], self.a1.headline)
+        self.assertEqual(native['pub_date'][0], self.a1.pub_date)
+        
+        article = serializer.deserialize(serial_python)
+        
+        self.assertEqual(article.headline, self.a1.headline)
+        self.assertEqual(article.pub_date, self.a1.pub_date)
+
+    def test_custom_fields_serializer(self):
+        """Tests that serializer serialized custom fields"""
+        serializer = CustomFieldsSerializer()
+        native, attributes = serial_python = serializer.serialize(self.a1)
+        
+        self.assertEqual(native['short_headline'][0], self.a1.headline[:10])
+        self.assertEqual(native['new_field'][0], "New field")
+        
+        article = serializer.deserialize(serial_python)
+        
+        self.assertFalse(hasattr(article, 'new_field'))
+        self.assertFalse(hasattr(article, 'short_headline'))
+
+    def test_label_serializer(self):
+        """Tests that serializer renamed fields with label"""
+        serializer = LabelSerializer()
+        native, attributes = serial_python = serializer.serialize(self.a1)
+        
+        self.assertTrue(native.has_key("title"))
+        self.assertFalse(native.has_key("headline"))
+        self.assertEqual(native['title'][0], self.a1.headline)
+        
+        article = serializer.deserialize(serial_python)
+        
+        self.assertFalse(hasattr(article, 'title'))
+        self.assertEqual(article.headline, self.a1.headline)
+
+    def test_attribute_serializer(self):
+        """Tests that serializer serialized attribute field"""
+        serializer = AttributeSerializer()
+        native, attributes = serial_python = serializer.serialize(self.a1)
+        
+        self.assertFalse(native.has_key("pub_date"))
+        self.assertTrue(attributes.has_key("pub_date"))
+        
+        article = serializer.deserialize(serial_python)
+        
+        self.assertEqual(article.pub_date, self.a1.pub_date)
+
+    
 class SerializersTestBase(object):
     @staticmethod
     def _comparison_value(value):

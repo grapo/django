@@ -7,6 +7,7 @@ Requires PyYaml (http://pyyaml.org/), but that's checked for in __init__.
 import decimal
 import yaml
 
+from django.core.serializers import native
 from django.core.serializers import base
 
 class DjangoSafeDumper(yaml.SafeDumper):
@@ -15,7 +16,7 @@ class DjangoSafeDumper(yaml.SafeDumper):
 
 DjangoSafeDumper.add_representer(decimal.Decimal, DjangoSafeDumper.represent_decimal)
 
-class Serializer(base.ObjectSerializer):
+class Serializer(native.ObjectSerializer):
     internal_use_only=False
 
 

@@ -162,6 +162,13 @@ class BaseSerializer(object):
 class Serializer(BaseSerializer):
     __metaclass__ = SerializerMetaclass
 
+class NativeFormat(object):
+    def serialize(self, objects, **options):
+        return objects
+
+    def deserialize(self, stream, **options):
+        return stream
+
 
 class DeserializedObject(object):
     """

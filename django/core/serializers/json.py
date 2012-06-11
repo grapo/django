@@ -10,10 +10,11 @@ import decimal
 import json
 
 from django.utils.timezone import is_aware
+from django.core.serializers import native
 from django.core.serializers import base
 
 
-class Serializer(base.ObjectSerializer):
+class Serializer(native.ObjectSerializer):
     internal_use_only=False
 
 

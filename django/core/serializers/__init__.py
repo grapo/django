@@ -76,7 +76,7 @@ def get_serializer(format):
     if not _serializers:
         _load_serializers()
     if format not in _serializers:
-        return ModelSerializer
+        raise SerializerDoesNotExist(format)
     return _serializers[format].Serializer
 
 
@@ -104,7 +104,7 @@ def get_deserializer(format):
     if not _serializers:
         _load_serializers()
     if format not in _serializers:
-        return ModelSerializer
+        raise SerializerDoesNotExist(format)
     return _serializers[format].Serializer
 
 

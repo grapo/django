@@ -4,10 +4,11 @@ and from basic Python data types (lists, dicts, strings, etc.). Useful as a basi
 other serializers.
 """
 
+from django.core.serializers import native
 from django.core.serializers import base
 
 
-class Serializer(base.ObjectSerializer):
+class Serializer(native.ObjectSerializer):
     internal_use_only = True
 
 
