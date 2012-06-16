@@ -8,6 +8,7 @@ from __future__ import absolute_import
 import datetime
 import decimal
 import json
+import inspect
 
 from django.utils.timezone import is_aware
 from django.core.serializers import native
@@ -17,9 +18,29 @@ from django.core.serializers import base
 class Serializer(native.ObjectSerializer):
     internal_use_only=False
 
+def remove_arguments(obj):
+    if isinstance(obj, tuple):
+        obj = obj[0]
+
+    if base.is_protected_type(obj):
+        new_obj = obj
+    elif isinstance(obj, dict):
+        new_obj = {}
+        for k,v in obj.iteritems():
+            new_obj[k] = remove_arguments(v)
+    elif hasattr(obj, '__iter__'):
+        new_obj = []
+        for item in obj:
+            new_obj.append(remove_arguments(item))
+    else:
+        new_obj = obj
+    return new_obj
 
 class NativeFormat(base.NativeFormat):
-    pass
+    def serialize(self, obj, **options):
+        obj = remove_arguments(obj)
+        return json.dumps(obj, cls=DjangoJSONEncoder, **options)
+
 
 
 class DjangoJSONEncoder(json.JSONEncoder):
@@ -46,6 +67,8 @@ class DjangoJSONEncoder(json.JSONEncoder):
             return r
         elif isinstance(o, decimal.Decimal):
             return str(o)
+        elif inspect.isgenerator(o):
+            return self.default(list(o))
         else:
             return super(DjangoJSONEncoder, self).default(o)
 

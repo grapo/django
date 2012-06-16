@@ -116,9 +116,11 @@ def serialize(format, queryset, serializer=None, **options):
     # TODO What to do with **options. Should not pass them everywhere
     if serializer is None:
         s = get_serializer(format)()
+    else:
+        s = serializer()
     format_serializer = get_format_serializer(format)()
 
-    native_objs = s.serialize(queryset, **options)
+    native_objs = s.serialize(queryset)
     return format_serializer.serialize(native_objs, **options)
 
 
