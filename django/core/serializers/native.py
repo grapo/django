@@ -21,7 +21,7 @@ class ObjectSerializerOptions(object):
         self.related_serializer = getattr(options, 'related_serializer', None)
         self.field_serializer = getattr(options, 'field_serializer', field.Field)
         self.related_reserialize = getattr(options, 'related_reserialize', None)
-        self.class_name = getattr(options, 'class_name', object)
+        self.class_name = getattr(options, 'class_name', None)
 
 
 class ObjectSerializerMetaclass(base.SerializerMetaclass):
@@ -68,7 +68,7 @@ class BaseObjectSerializer(base.Serializer):
                 return _get_model(obj[self.opts.class_name])()
             else:
                 return self.opts.class_name()
-        raise base.DeserializationError(u"Can't resolve model")
+        raise base.DeserializationError(u"Can't resolve class for object creation")
 
 
 class ObjectSerializer(BaseObjectSerializer):

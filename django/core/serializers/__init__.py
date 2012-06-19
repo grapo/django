@@ -107,7 +107,6 @@ def get_deserializer(format):
         raise SerializerDoesNotExist(format)
     return _serializers[format].Serializer
 
-
 def serialize(format, queryset, serializer=None, **options):
     """
     Serialize a queryset (or any iterator that returns database objects) using
@@ -119,7 +118,7 @@ def serialize(format, queryset, serializer=None, **options):
     else:
         s = serializer()
     format_serializer = get_format_serializer(format)()
-
+    
     native_objs = s.serialize(queryset)
     return format_serializer.serialize(native_objs, **options)
 
@@ -133,6 +132,8 @@ def deserialize(format, stream_or_string, deserializer=None, **options):
     """
     if deserializer is None:
         d = get_serializer(format)()
+    else:
+        d = deserializer()
     format_deserializer = get_format_serializer(format)()
     native_objs = format_deserializer.deserialize(stream_or_string, **options)
     return d.deserialize(native_objs, **options)

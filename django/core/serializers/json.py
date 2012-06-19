@@ -36,10 +36,28 @@ def remove_arguments(obj):
         new_obj = obj
     return new_obj
 
+def add_arguments(obj):
+    if isinstance(obj, dict):
+        new_obj = {}
+        for k,v in obj.iteritems():
+            new_obj[k] = add_arguments(v)
+    elif hasattr(obj, '__iter__'):
+        new_obj = []
+        for item in obj:
+            new_obj.append(add_arguments(item))
+    else:
+        new_obj = obj
+    return (new_obj, {})
+
+
 class NativeFormat(base.NativeFormat):
     def serialize(self, obj, **options):
         obj = remove_arguments(obj)
         return json.dumps(obj, cls=DjangoJSONEncoder, **options)
+
+    def deserialize(self, obj, **options):
+        des_obj = json.loads(obj, **options)
+        return add_arguments(des_obj)
 
 
 

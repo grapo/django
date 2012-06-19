@@ -36,7 +36,7 @@ class BaseField(base.Serializer):
          
         for field_name, serializer in fields.iteritems():
             serialized_name = serializer.label if serializer.label is not None else field_name
-            if serializer.attribute:
+            if serializer.attribute and serialized_name in attributes:
                 instance = serializer.deserialize(attributes[serialized_name], instance, field_name)
 
         return instance

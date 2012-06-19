@@ -120,30 +120,39 @@ class BaseSerializer(object):
         fields = self.get_fields_for_object(obj)
         return self.get_native_from_object(obj, fields)
 
-    def deserialize_iterable(self, obj, instance, field_name):
+    def deserialize_iterable(self, obj):
         for item in obj:
-            yield self.deserialize(item, instance, field_name)
+            yield self.deserialize(item)
 
     def deserialize(self, obj, instance=None, field_name=None):
         native, attributes = obj
         if not isinstance(native, dict) and hasattr(native, '__iter__'):
             if instance is None:
-                return self.deserialize_iterable(native, instance, field_name)
+                return self.deserialize_iterable(native)
             else:
-                setattr(instance, field_name, self.deserialize_iterable(native, instance, field_name))
+                setattr(instance, field_name, self.deserialize_iterable(native))
                 return instance
 
         join_dict = dict(native.items() + attributes.items()) # keys in native are always diffrent than in attributes
         
         new_instance = self.get_instance(join_dict, instance) # possibly new_instance == instance
         fields = self.get_fields_for_object(new_instance)
-        for field_name, serializer in fields.iteritems():
-            serialized_name = serializer.label if serializer.label is not None else field_name
-            if serializer.attribute:
-                new_instance = serializer.deserialize(attributes[serialized_name], new_instance, field_name)
+        
+        for subfield_name, serializer in fields.iteritems():
+            serialized_name = serializer.label if serializer.label is not None else subfield_name
+            if serializer.attribute and serialized_name in attributes:
+                new_instance = serializer.deserialize(attributes[serialized_name], new_instance, subfield_name)
+            elif serialized_name in native:
+                new_instance = serializer.deserialize(native[serialized_name], new_instance, subfield_name)
+        
+        if field_name:
+            if instance == new_instance:
+                return new_instance
             else:
-                new_instance = serializer.deserialize(native[serialized_name], new_instance, field_name)
-        return new_instance
+                setattr(instance, field_name, new_instance)
+                return instance
+        else:
+            return new_instance
 
     def get_instance(self, obj, instance):
         if instance is None:
