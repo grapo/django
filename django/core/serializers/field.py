@@ -21,7 +21,7 @@ class BaseField(base.Serializer):
     def __init__(self, label=None, attribute=False):
         if attribute and self.base_fields:
             raise base.SerializerError("Attribute Field can't have declared fields")
-        super(BaseField, self).__init__(label, False, attribute)
+        super(BaseField, self).__init__(label, attribute, False)
 
     def serialize(self, obj, field_name):
         native, attributes = super(BaseField, self).serialize(obj, field_name)

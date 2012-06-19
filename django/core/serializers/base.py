@@ -74,13 +74,13 @@ class SerializerMetaclass(type):
 class BaseSerializer(object):
     creation_counter = 0
 
-    def __init__(self, label=None, follow_object=True, attribute=False):
+    def __init__(self, label=None, attribute=False, follow_object=True):
         self.label = label
         self.follow_object = follow_object
         self.attribute = attribute
 
     def get_object(self, obj, field_name):
-        if self.follow_object:
+        if self.follow_object and field_name:
             return getattr(obj, field_name)
         return obj
 
@@ -106,17 +106,17 @@ class BaseSerializer(object):
             yield self.serialize(item)
 
     def serialize(self, obj, field_name=None):
+        obj = self.get_object(obj, field_name)
         if is_protected_type(obj):
             return (obj, {})
         elif isinstance(obj, dict):
-            return (dict([(k, self.serialize_object(v, field_name)) for k,v in obj.items()] ), {})
+            return (dict([(k, self.serialize_object(v)) for k,v in obj.items()] ), {})
         elif hasattr(obj, '__iter__'):
             return (self.serialize_iterable(obj), {})
         else:
-            return self.serialize_object(obj, field_name)
+            return self.serialize_object(obj)
 
-    def serialize_object(self, obj, field_name):
-        obj = self.get_object(obj, field_name)
+    def serialize_object(self, obj):
         fields = self.get_fields_for_object(obj)
         return self.get_native_from_object(obj, fields)
 

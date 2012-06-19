@@ -32,7 +32,7 @@ class ObjectSerializerMetaclass(base.SerializerMetaclass):
 
 
 class BaseObjectSerializer(base.Serializer):
-    def __init__(self, label=None, attribute=None, follow_object=False, **kwargs):
+    def __init__(self, label=None, attribute=None, follow_object=True, **kwargs):
         super(BaseObjectSerializer, self).__init__(label, attribute, follow_object)
         self.opts = make_options(self._meta, **kwargs)
 
