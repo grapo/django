@@ -1,53 +1,63 @@
 """
 Module for field serializer/unserializer classes.
 """
-from django.core.serializers import base
-
-class FieldMetaclass(base.SerializerMetaclass):
-    """
-    Metaclass that converts Serializer attributes to a dictionary called
-    'base_fields', taking into account parent class 'base_fields' as well.
-    """
-    def __new__(cls, name, bases, attrs):
-        new_class = super(FieldMetaclass,
-                     cls).__new__(cls, name, bases, attrs)
-        for field in new_class.base_fields.itervalues():
-            if not field.attribute:
-                raise base.SerializerError("Field subfields must be attributes")
-        return new_class
+from django.core.serializers.base import Serializer
+from django.core.serializers.utils import DictWithMetadata
 
 
-class BaseField(base.Serializer):
-    def __init__(self, label=None, attribute=False):
-        if attribute and self.base_fields:
-            raise base.SerializerError("Attribute Field can't have declared fields")
-        super(BaseField, self).__init__(label, attribute, False)
+class Field(Serializer):
+    def __init__(self, label=None):
+        super(Field, self).__init__(label=label, follow_object=False)
 
-    def serialize(self, obj, field_name):
-        native, attributes = super(BaseField, self).serialize(obj, field_name)
-        assert native == {}
-        return (self.serialized_value(obj, field_name), attributes) # serialized_value can only return native datatype
+    def _serialize(self, obj, field_name):
+        new_obj = self.get_object(obj, field_name)
+        serialized_obj = self.serialize(new_obj)
+        metadict = self._metadata(obj, field_name)
+        return (serialized_obj, metadict)
 
-    def deserialize(self, obj, instance, field_name):
-        native, attributes = obj
-        self.deserialized_value(native, instance, field_name)
-        native, attributes = obj
-        fields = self.get_fields_for_object(instance)
-         
-        for field_name, serializer in fields.iteritems():
-            serialized_name = serializer.label if serializer.label is not None else field_name
-            if serializer.attribute and serialized_name in attributes:
-                instance = serializer.deserialize(attributes[serialized_name], instance, field_name)
+    def _serialize_fields(self, obj, orig_field_name):
+        fields = DictWithMetadata()
+        for field_name, serializer in self.base_fields.iteritems():
+            nativ_obj, metadict = serializer._serialize(obj, orig_field_name)
+            if serializer.label:
+                field_name = serializer.label
+            fields.set_with_metadata(field_name, nativ_obj, metadict)
+        return fields
 
+    def _metadata(self, obj, field_name):
+        fields = self._serialize_fields(obj, field_name)
+        metadict = {'fields': fields}
+        metadict = self.metadata(metadict)
+        return metadict
+
+    def get_object(self, obj, field_name):
+        return getattr(obj, field_name, obj)
+
+    def serialize(self, obj):
+        if isinstance(obj, dict):
+            return dict([(k, self.serialize(v)) for k, v in obj.iteritems()])
+        elif hasattr(obj, '__iter__'):
+            return (self.serialize(o) for o in obj)
+        else:
+            return self.serialize_value(obj)
+
+    def serialize_value(self, obj):
+        return obj
+
+    def _deserialize(self, serialized_obj, instance, field_name):
+        self.set_object(self.deserialize(serialized_obj), instance, field_name)
         return instance
 
-    def serialized_value(self, obj, field_name):
-        return getattr(obj, field_name)
+    def set_object(self, obj, instance, field_name):
+        return setattr(instance, field_name, obj)
 
-    def deserialized_value(self, obj, instance, field_name):
-        setattr(instance, field_name, obj)
+    def deserialize(self, obj):
+        if isinstance(obj, dict):
+            return dict([(k, self.deserialize(v)) for k, v in obj.iteritems()])
+        elif hasattr(obj, '__iter__'):
+            return (self.deserialize(o) for o in obj)
+        else:
+            return self.deserialize_value(obj)
 
-
-class Field(BaseField):
-    __metaclass__ = FieldMetaclass
-
+    def deserialize_value(self, obj):
+        return obj

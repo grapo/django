@@ -6,6 +6,7 @@ from django.db import models
 from django.core.serializers import base
 from django.core.serializers import field
 
+
 def make_options(options, **kwargs):
     for name in options.__dict__:
         attr = kwargs.get(name)
@@ -32,8 +33,8 @@ class ObjectSerializerMetaclass(base.SerializerMetaclass):
 
 
 class BaseObjectSerializer(base.Serializer):
-    def __init__(self, label=None, attribute=None, follow_object=True, **kwargs):
-        super(BaseObjectSerializer, self).__init__(label, attribute, follow_object)
+    def __init__(self, label=None, follow_object=True, **kwargs):
+        super(BaseObjectSerializer, self).__init__(label, follow_object)
         self.opts = make_options(self._meta, **kwargs)
 
     def get_object_field_serializer(self, obj, field_name):
@@ -57,16 +58,13 @@ class BaseObjectSerializer(base.Serializer):
             if f_name in declared_fields_names:
                 continue
             fields[f_name] = self.get_object_field_serializer(obj, f_name)
-            
+
         fields.update(declared_fields)
-        
+
         return fields
-    
-    def create_instance(self, obj):
+
+    def create_instance(self, serialized_obj):
         if self.opts.class_name is not None:
-            if isinstance(self.opts.class_name, str):
-                return _get_model(obj[self.opts.class_name])()
-            else:
                 return self.opts.class_name()
         raise base.DeserializationError(u"Can't resolve class for object creation")
 
@@ -76,7 +74,13 @@ class ObjectSerializer(BaseObjectSerializer):
 
 
 class ModelSerializer(ObjectSerializer):
-    pass
+    def create_instance(self, serialized_obj):
+        if self.opts.class_name is not None:
+            if isinstance(self.opts.class_name, str):
+                return _get_model(serialized_obj[self.opts.class_name])()
+            else:
+                return self.opts.class_name()
+        raise base.DeserializationError(u"Can't resolve class for object creation")
 
 
 def _get_model(model_identifier):

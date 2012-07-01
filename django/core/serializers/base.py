@@ -6,6 +6,8 @@ from decimal import Decimal
 
 from django.utils.datastructures import SortedDict
 from django.db import models
+from django.core.serializers.utils import DictWithMetadata
+
 
 def is_protected_type(obj):
     """Determine if the object instance is of a protected type.
@@ -47,7 +49,7 @@ def get_declared_fields(bases, attrs):
     Create a list of serializer field instances from the passed in 'attrs', plus any
     similar fields on the base classes (in 'bases').
     """
-    fields = [(field_name, attrs.pop(field_name)) for field_name, obj in attrs.items() if isinstance(obj, BaseSerializer)]
+    fields = [(field_name, attrs.pop(field_name)) for field_name, obj in attrs.items() if isinstance(obj, (BaseSerializer))]
     fields.sort(key=lambda x: x[1].creation_counter)
 
     # If this class is subclassing another Serializer, add that Serializer's fields.
@@ -74,12 +76,11 @@ class SerializerMetaclass(type):
 class BaseSerializer(object):
     creation_counter = 0
 
-    def __init__(self, label=None, attribute=False, follow_object=True):
+    def __init__(self, label=None, follow_object=True):
         self.label = label
         self.follow_object = follow_object
-        self.attribute = attribute
 
-    def get_object(self, obj, field_name):
+    def get_object(self, obj, field_name=None):
         if self.follow_object and field_name:
             return getattr(obj, field_name)
         return obj
@@ -87,89 +88,73 @@ class BaseSerializer(object):
     def get_fields_for_object(self, obj):
         return self.base_fields
 
-    def get_native_from_object(self, obj, fields):
-        native = {}
-        attributes = {}
-        for field_name, serializer in fields.iteritems():
-            nativ_obj = serializer.serialize(obj, field_name)
-            if serializer.label:
-                field_name = serializer.label
+    def _metadata(self, obj, field_name):
+        metadict = {}
+        metadict = self.metadata(metadict)
+        return metadict
 
-            if serializer.attribute:
-                attributes[field_name] = nativ_obj
-            else:
-                native[field_name] = nativ_obj
-        return (native, attributes)
+    def metadata(self, metadict):
+        return metadict
 
-    def serialize_iterable(self, obj):
-        for item in obj:
-            yield self.serialize(item)
+    def _serialize(self, obj, field_name):
+        new_obj = self.get_object(obj, field_name)
+        metadict = self._metadata(obj, field_name)
+        return (self.serialize(new_obj), metadict)
 
-    def serialize(self, obj, field_name=None):
-        obj = self.get_object(obj, field_name)
+    def serialize(self, obj):
         if is_protected_type(obj):
-            return (obj, {})
+            return obj
         elif isinstance(obj, dict):
-            return (dict([(k, self.serialize_object(v)) for k,v in obj.items()] ), {})
+            return dict([(k, self.serialize(v)) for k, v in obj.iteritems()])
         elif hasattr(obj, '__iter__'):
-            return (self.serialize_iterable(obj), {})
+            return (self.serialize(o) for o in obj)
         else:
             return self.serialize_object(obj)
 
     def serialize_object(self, obj):
         fields = self.get_fields_for_object(obj)
-        return self.get_native_from_object(obj, fields)
 
-    def deserialize_iterable(self, obj):
-        for item in obj:
-            yield self.deserialize(item)
+        native = DictWithMetadata()
+        for field_name, serializer in fields.iteritems():
+            nativ_obj, metadict = serializer._serialize(obj, field_name)
+            if serializer.label:
+                field_name = serializer.label
+            native.set_with_metadata(field_name, nativ_obj, metadict)
+        return native
 
-    def deserialize(self, obj, instance=None, field_name=None):
-        native, attributes = obj
-        if not isinstance(native, dict) and hasattr(native, '__iter__'):
-            if instance is None:
-                return self.deserialize_iterable(native)
-            else:
-                setattr(instance, field_name, self.deserialize_iterable(native))
-                return instance
+    def deserialize(self, serialized_obj, instance=None):
+        if not isinstance(serialized_obj, dict) and hasattr(serialized_obj, '__iter__'):
+            return (self.deserialize(o) for o in serialized_obj)
 
-        join_dict = dict(native.items() + attributes.items()) # keys in native are always diffrent than in attributes
-        
-        new_instance = self.get_instance(join_dict, instance) # possibly new_instance == instance
-        fields = self.get_fields_for_object(new_instance)
-        
+        instance = self._get_instance(serialized_obj, instance)
+        fields = self.get_fields_for_object(instance)
+
         for subfield_name, serializer in fields.iteritems():
             serialized_name = serializer.label if serializer.label is not None else subfield_name
-            if serializer.attribute and serialized_name in attributes:
-                new_instance = serializer.deserialize(attributes[serialized_name], new_instance, subfield_name)
-            elif serialized_name in native:
-                new_instance = serializer.deserialize(native[serialized_name], new_instance, subfield_name)
-        
-        if field_name:
-            if instance == new_instance:
-                return new_instance
-            else:
-                setattr(instance, field_name, new_instance)
-                return instance
-        else:
-            return new_instance
+            if serialized_name in serialized_obj:
+                instance = serializer._deserialize(serialized_obj[serialized_name], instance, subfield_name)
+        return instance
 
-    def get_instance(self, obj, instance):
+    def _deserialize(self, serialized_obj, instance, field_name):
+        if not self.follow_object:
+            return self.deserialize(serialized_obj, instance)
+        else:
+            setattr(instance, field_name, self.deserialize(serialized_obj))
+            return instance
+
+    def _get_instance(self, obj, instance=None):
         if instance is None:
-            new_instance = self.create_instance(obj)
-        elif self.follow_object:
-            new_instance = self.create_instance(obj)
+            return self.create_instance(obj)
         else:
-            new_instance = instance
+            return instance
 
-        return new_instance
-
-    def create_instance(self, obj):
+    def create_instance(self, serialized_obj):
         raise NotImplementedError()
 
 
 class Serializer(BaseSerializer):
     __metaclass__ = SerializerMetaclass
+
 
 class NativeFormat(object):
     def serialize(self, objects, **options):
