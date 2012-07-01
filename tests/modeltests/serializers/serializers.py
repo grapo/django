@@ -4,18 +4,18 @@ from .models import Article
 
 
 class ShortField(Field):
-    def serialized_value(self, obj, field_name):
+    def serialize_value(self, obj):
         return getattr(obj, 'headline')[:10]
 
-    def deserialized_value(self, obj, instance, field_name):
+    def set_object(self, obj, instance, field_name):
         pass
 
 
 class NewField(Field):
-    def serialized_value(self, obj, field_name):
+    def serialize_value(self, obj):
         return "New field"
     
-    def deserialized_value(self, obj, instance, field_name):
+    def set_object(self, obj, instance, field_name):
         pass
     
 
@@ -34,4 +34,8 @@ class LabelSerializer(ArticleSerializer):
 
 
 class AttributeSerializer(ArticleSerializer):
-    pub_date = Field(attribute=True)
+    pub_date = Field()
+
+    def metadata(self, metadict):
+        metadict['attributes'] = ['pub_date']
+        return metadict

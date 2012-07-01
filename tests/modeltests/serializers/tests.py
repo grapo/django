@@ -70,7 +70,7 @@ class SerializerRegistrationTests(unittest.TestCase):
 class NativeSerializersTests(TestCase):
     @staticmethod
     def _validate_output(serial_python):
-        return isinstance(serial_python, tuple) and len(serial_python) == 2
+        return isinstance(serial_python, dict)
     
     def setUp(self):
         sports = Category.objects.create(name="Sports")
@@ -99,7 +99,7 @@ class NativeSerializersTests(TestCase):
     def test_serialize(self):
         """Tests that basic serialization works."""
         serializer = serializers.ObjectSerializer()
-        serial_python = serializer.serialize(Article.objects.all())
+        serial_python = serializer.serialize(Article.objects.all()[0])
         self.assertTrue(self._validate_output(serial_python))
 
     def test_serialize_roundtrip(self):
@@ -112,10 +112,10 @@ class NativeSerializersTests(TestCase):
     def test_object_fields_serializer(self):
         """Tests that serializer serialized object fields"""
         serializer = ArticleSerializer()
-        native, attributes = serial_python = serializer.serialize(self.a1)
+        serial_python = serializer.serialize(self.a1)
 
-        self.assertEqual(native['headline'][0], self.a1.headline)
-        self.assertEqual(native['pub_date'][0], self.a1.pub_date)
+        self.assertEqual(serial_python['headline'], self.a1.headline)
+        self.assertEqual(serial_python['pub_date'], self.a1.pub_date)
         
         article = serializer.deserialize(serial_python)
         
@@ -125,10 +125,9 @@ class NativeSerializersTests(TestCase):
     def test_custom_fields_serializer(self):
         """Tests that serializer serialized custom fields"""
         serializer = CustomFieldsSerializer()
-        native, attributes = serial_python = serializer.serialize(self.a1)
-        
-        self.assertEqual(native['short_headline'][0], self.a1.headline[:10])
-        self.assertEqual(native['new_field'][0], "New field")
+        serial_python = serializer.serialize(self.a1)
+        self.assertEqual(serial_python['short_headline'], self.a1.headline[:10])
+        self.assertEqual(serial_python['new_field'], "New field")
         
         article = serializer.deserialize(serial_python)
         
@@ -138,11 +137,11 @@ class NativeSerializersTests(TestCase):
     def test_label_serializer(self):
         """Tests that serializer renamed fields with label"""
         serializer = LabelSerializer()
-        native, attributes = serial_python = serializer.serialize(self.a1)
+        serial_python = serializer.serialize(self.a1)
         
-        self.assertTrue(native.has_key("title"))
-        self.assertFalse(native.has_key("headline"))
-        self.assertEqual(native['title'][0], self.a1.headline)
+        self.assertTrue(serial_python.has_key("title"))
+        self.assertFalse(serial_python.has_key("headline"))
+        self.assertEqual(serial_python['title'], self.a1.headline)
         
         article = serializer.deserialize(serial_python)
         
@@ -152,10 +151,8 @@ class NativeSerializersTests(TestCase):
     def test_attribute_serializer(self):
         """Tests that serializer serialized attribute field"""
         serializer = AttributeSerializer()
-        native, attributes = serial_python = serializer.serialize(self.a1)
-        
-        self.assertFalse(native.has_key("pub_date"))
-        self.assertTrue(attributes.has_key("pub_date"))
+        serial_python = serializer.serialize(self.a1)
+        self.assertTrue("pub_date" in serializer.metadata({})['attributes'])
         
         article = serializer.deserialize(serial_python)
         
