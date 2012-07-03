@@ -81,11 +81,20 @@ class BaseSerializer(object):
         self.follow_object = follow_object
 
     def get_object(self, obj, field_name=None):
+        """
+        Returns object that should be serialized.
+        """
         if self.follow_object and field_name:
             return getattr(obj, field_name)
         return obj
 
     def get_fields_for_object(self, obj):
+        """
+        Returns fields that should be serialized in given object.
+
+        Subclasses may wish to override it to handle additional fields,
+        not only declared in Serialier.
+        """
         return self.base_fields
 
     def _metadata(self, obj, field_name):
@@ -94,6 +103,9 @@ class BaseSerializer(object):
         return metadict
 
     def metadata(self, metadict):
+        """
+        Add user defined values to metadict
+        """
         return metadict
 
     def _serialize(self, obj, field_name):
@@ -102,6 +114,14 @@ class BaseSerializer(object):
         return (self.serialize(new_obj), metadict)
 
     def serialize(self, obj):
+        """
+        Serializes given object.
+        Handles dict and iterable objects recursively.
+        If object pass is_protected_type test then
+        return it as is else serialize specified object's fields
+        recursively.
+
+        """
         if is_protected_type(obj):
             return obj
         elif isinstance(obj, dict):
@@ -112,6 +132,11 @@ class BaseSerializer(object):
             return self.serialize_object(obj)
 
     def serialize_object(self, obj):
+        """
+        Serializes object to dict where object's fields are 
+        serialized to dict values.
+        """
+
         fields = self.get_fields_for_object(obj)
 
         native = DictWithMetadata()
@@ -123,6 +148,13 @@ class BaseSerializer(object):
         return native
 
     def deserialize(self, serialized_obj, instance=None):
+        """
+        Deserializes object from give python native datatype.
+
+        If instance is set then it should be used else
+        create new instance and deserialze serialized_obj to this instance.
+        
+        """
         if not isinstance(serialized_obj, dict) and hasattr(serialized_obj, '__iter__'):
             return (self.deserialize(o) for o in serialized_obj)
 
@@ -149,6 +181,9 @@ class BaseSerializer(object):
             return instance
 
     def create_instance(self, serialized_obj):
+        """
+        Returns instance to which serialized_obj should be deserialized.
+        """
         raise NotImplementedError()
 
 

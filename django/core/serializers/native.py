@@ -33,8 +33,13 @@ class ObjectSerializerMetaclass(base.SerializerMetaclass):
 
 
 class BaseObjectSerializer(base.Serializer):
+    """
+    Base class for serializing Python objects.
+    """
     def __init__(self, label=None, follow_object=True, **kwargs):
         super(BaseObjectSerializer, self).__init__(label, follow_object)
+        
+        # possibility to override options when class is instantiated
         self.opts = make_options(self._meta, **kwargs)
 
     def get_object_field_serializer(self, obj, field_name):
@@ -74,6 +79,10 @@ class ObjectSerializer(BaseObjectSerializer):
 
 
 class ModelSerializer(ObjectSerializer):
+    """
+    Class for serializing Django models.
+
+    """
     def create_instance(self, serialized_obj):
         if self.opts.class_name is not None:
             if isinstance(self.opts.class_name, str):

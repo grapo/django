@@ -6,6 +6,10 @@ from django.core.serializers.utils import DictWithMetadata
 
 
 class Field(Serializer):
+    """ 
+    Class that serialize and deserialize object to python native datatype.
+    
+    """
     def __init__(self, label=None):
         super(Field, self).__init__(label=label, follow_object=False)
 
@@ -31,6 +35,9 @@ class Field(Serializer):
         return metadict
 
     def get_object(self, obj, field_name):
+        """ 
+        Returns object that should be serialized.
+        """
         return getattr(obj, field_name, obj)
 
     def serialize(self, obj):
@@ -42,6 +49,12 @@ class Field(Serializer):
             return self.serialize_value(obj)
 
     def serialize_value(self, obj):
+        """
+        Returns native python datatype.
+        
+        Object returned by this method must be accepted by serialization
+        format or exception will be thrown.
+        """
         return obj
 
     def _deserialize(self, serialized_obj, instance, field_name):
@@ -49,7 +62,13 @@ class Field(Serializer):
         return instance
 
     def set_object(self, obj, instance, field_name):
-        return setattr(instance, field_name, obj)
+        """
+        Assigns deserialized object obj to given instance.
+        
+        If field shouldn't be deserialized then this method
+        must be override and do nothing.
+        """
+        setattr(instance, field_name, obj)
 
     def deserialize(self, obj):
         if isinstance(obj, dict):
@@ -60,4 +79,7 @@ class Field(Serializer):
             return self.deserialize_value(obj)
 
     def deserialize_value(self, obj):
+        """
+        Returns object that will be assign as field to instance
+        """
         return obj
