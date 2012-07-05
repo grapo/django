@@ -3,7 +3,7 @@ Module for field serializer/unserializer classes.
 """
 from django.core.serializers.base import Serializer
 from django.core.serializers.utils import DictWithMetadata
-
+from django.utils.encoding import is_protected_type, smart_unicode
 
 class Field(Serializer):
     """ 
@@ -83,3 +83,44 @@ class Field(Serializer):
         Returns object that will be assign as field to instance
         """
         return obj
+
+
+class ModelField(Field):
+    def get_object(self, obj, field_name):
+        field = obj._meta.get_field_by_name(field_name)[0]
+        return field._get_val_from_obj(obj)
+
+    def serialize(self, obj):
+        if is_protected_type(obj):
+            return obj
+        else:
+            return smart_unicode(obj)
+
+
+class RelatedField(Field):
+    def get_object(self, obj, field_name):
+        field, _, _, m2m = obj._meta.get_field_by_name(field_name)
+        if m2m and field.rel.through._meta.auto_created:
+            return (o._get_pk_val() for o in getattr(obj, field_name).iterator())
+        return field._get_val_from_obj(obj)
+
+    def serialize(self, obj):
+        if hasattr(obj, '__iter__'):
+            return (self.serialize(o) for o in obj)
+        elif is_protected_type(obj):
+            return obj
+        else:
+            return smart_unicode(obj)
+
+
+class PrimaryKeyField(ModelField):
+    def get_object(self, obj, field_name):
+        return obj._get_pk_val()
+
+
+class ModelNameField(Field):
+    """
+    Serializes the model instance's model name.  Eg. 'auth.User'.
+    """
+    def get_object(self, obj, field_name):
+        return smart_unicode(obj._meta)

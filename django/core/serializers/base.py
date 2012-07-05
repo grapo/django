@@ -123,7 +123,7 @@ class BaseSerializer(object):
 
         """
         if is_protected_type(obj):
-            return obj
+            return obj # mayby exception shold be raised (Field serializer should be used)
         elif isinstance(obj, dict):
             return dict([(k, self.serialize(v)) for k, v in obj.iteritems()])
         elif hasattr(obj, '__iter__'):
