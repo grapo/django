@@ -13,10 +13,22 @@ import inspect
 from django.utils.timezone import is_aware
 from django.core.serializers import native
 from django.core.serializers import base
+from django.core.serializers import field
 
 
-class Serializer(native.ObjectSerializer):
+class FieldsSerializer(native.ModelSerializer):
+    pass
+
+
+class Serializer(native.ModelSerializer):
     internal_use_only = False
+    
+    pk = field.PrimaryKeyField()
+    model = field.ModelNameField() 
+    fields = FieldsSerializer(follow_object=False)
+
+    class Meta:
+        fields = ()
 
 
 class NativeFormat(base.NativeFormat):
