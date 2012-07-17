@@ -2,6 +2,7 @@
 Module for abstract serializer/unserializer base classes.
 """
 from django.db import models
+from django.utils.datastructures import SortedDict
 
 from django.core.serializers import base
 from django.core.serializers import field
@@ -53,7 +54,7 @@ class BaseObjectSerializer(base.Serializer):
         if self.opts.fields is not None and not self.opts.fields:
             return declared_fields
         declared_fields_names = declared_fields.keys()
-        fields = {}
+        fields = SortedDict()
         fields_names = self.get_object_fields_names(obj)
         for f_name in fields_names:
             if self.opts.fields is not None and f_name not in self.opts.fields:
@@ -63,10 +64,19 @@ class BaseObjectSerializer(base.Serializer):
             if f_name in declared_fields_names:
                 continue
             fields[f_name] = self.get_object_field_serializer(obj, f_name)
-
-        fields.update(declared_fields)
-
-        return fields
+        declared_fields_copy = declared_fields.copy()
+        declared_fields_copy.update(fields)
+        if self.opts.fields: # ordering must be like in self.opts.fields
+            serializable_fields = SortedDict()
+            for name in self.opts.fields:
+                item = declared_fields_copy.pop(name)
+                if item is None:
+                    raise base.SerializationError(u"")
+                serializable_fields[name] = item
+            serializable_fields.update(declared_fields_copy)
+            return serializable_fields
+        else: # declared first
+            return declared_fields_copy
 
     def create_instance(self, serialized_obj):
         if self.opts.class_name is not None:
@@ -106,7 +116,6 @@ class BaseModelSerializer(BaseObjectSerializer):
     def get_object_fields_names(self, obj):
         concrete_model = obj._meta.concrete_model
         names = []
-        names.append(concrete_model._meta.pk.name)
         names.extend([field.name for field in concrete_model._meta.local_fields if field.serialize])
         names.extend([field.name for field in concrete_model._meta.many_to_many if field.serialize])
         return names

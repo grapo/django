@@ -79,6 +79,10 @@ class BaseSerializer(object):
     def __init__(self, label=None, follow_object=True):
         self.label = label
         self.follow_object = follow_object
+        
+        # Increase the creation counter, and save our local copy.
+        self.creation_counter = BaseSerializer.creation_counter
+        BaseSerializer.creation_counter += 1
 
     def get_object(self, obj, field_name=None):
         """

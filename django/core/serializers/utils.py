@@ -1,4 +1,7 @@
-class DictWithMetadata(dict):
+from django.utils.datastructures import SortedDict
+
+
+class DictWithMetadata(SortedDict):
     """
     A dict-like object, that can have additional metadata attached.
     """

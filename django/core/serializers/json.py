@@ -28,7 +28,8 @@ class Serializer(native.ModelSerializer):
     fields = FieldsSerializer(follow_object=False)
 
     class Meta:
-        fields = ()
+        fields = ('model', 'pk')
+        class_name="model"
 
 
 class NativeFormat(base.NativeFormat):
