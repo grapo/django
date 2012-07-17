@@ -88,13 +88,14 @@ class Field(Serializer):
 class ModelField(Field):
     def get_object(self, obj, field_name):
         field = obj._meta.get_field_by_name(field_name)[0]
-        return field._get_val_from_obj(obj)
-
-    def serialize(self, obj):
         if is_protected_type(obj):
             return obj
         else:
-            return smart_unicode(obj)
+            return field.value_to_string(obj)
+        return field._get_val_from_obj(obj)
+
+    def serialize(self, obj):
+        return obj
 
 
 class RelatedField(Field):
