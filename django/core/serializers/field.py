@@ -88,15 +88,17 @@ class Field(Serializer):
 class ModelField(Field):
     def get_object(self, obj, field_name):
         field = obj._meta.get_field_by_name(field_name)[0]
-        if is_protected_type(obj):
-            return obj
+        value = field._get_val_from_obj(obj)
+        if is_protected_type(value):
+            return value
         else:
             return field.value_to_string(obj)
-        return field._get_val_from_obj(obj)
 
     def serialize(self, obj):
         return obj
 
+    def set_object(self, obj, instance, field_name):
+        setattr(instance.object, field_name, obj)
 
 class RelatedField(Field):
     def get_object(self, obj, field_name):
@@ -105,6 +107,13 @@ class RelatedField(Field):
             return (o._get_pk_val() for o in getattr(obj, field_name).iterator())
         return field._get_val_from_obj(obj)
 
+    def set_object(self, obj, instance, field_name):
+        field, _, _, m2m = instance.object._meta.get_field_by_name(field_name)
+        if m2m:
+            instance.m2m_data[field_name] = obj
+        else:
+            setattr(instance.object, field.attname, obj)
+    
     def serialize(self, obj):
         if hasattr(obj, '__iter__'):
             return (self.serialize(o) for o in obj)

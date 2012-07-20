@@ -27,13 +27,22 @@ class Serializer(native.ModelSerializer):
     model = field.ModelNameField() 
     fields = FieldsSerializer(follow_object=False)
 
+
+    def __init__(self, label=None, follow_object=True, **kwargs):
+        super(Serializer, self).__init__(label, follow_object)
+        # should this be rewrited?
+        self.base_fields['fields'].opts = native.make_options(self.base_fields['fields']._meta, **kwargs)
+        
+
     class Meta:
-        fields = ('model', 'pk')
-        class_name="model"
+        fields = ()
+        class_name = "model"
 
 
 class NativeFormat(base.NativeFormat):
     def serialize(self, obj, **options):
+        options.pop('stream', None)
+        options.pop('fields', None)
         return json.dumps(obj, cls=DjangoJSONEncoder, **options)
 
     def deserialize(self, obj, **options):

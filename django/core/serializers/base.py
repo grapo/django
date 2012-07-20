@@ -151,6 +151,9 @@ class BaseSerializer(object):
             native.set_with_metadata(field_name, nativ_obj, metadict)
         return native
 
+    def get_deserializable_fields_for_object(self, obj): # ugly - how to fix this?
+        return self.get_fields_for_object(obj)
+
     def deserialize(self, serialized_obj, instance=None):
         """
         Deserializes object from give python native datatype.
@@ -163,7 +166,7 @@ class BaseSerializer(object):
             return (self.deserialize(o) for o in serialized_obj)
 
         instance = self._get_instance(serialized_obj, instance)
-        fields = self.get_fields_for_object(instance)
+        fields = self.get_deserializable_fields_for_object(instance)
 
         for subfield_name, serializer in fields.iteritems():
             serialized_name = serializer.label if serializer.label is not None else subfield_name
@@ -217,6 +220,8 @@ class DeserializedObject(object):
 
     def __init__(self, obj, m2m_data=None):
         self.object = obj
+        if m2m_data == None:
+            m2m_data = {} # possible backward incompatibility
         self.m2m_data = m2m_data
 
     def __repr__(self):

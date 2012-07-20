@@ -3,12 +3,14 @@ Module for abstract serializer/unserializer base classes.
 """
 from django.db import models
 from django.utils.datastructures import SortedDict
+import copy
 
 from django.core.serializers import base
 from django.core.serializers import field
 
 
-def make_options(options, **kwargs):
+def make_options(meta, **kwargs):
+    options = copy.copy(meta)
     for name in options.__dict__:
         attr = kwargs.get(name)
         if attr:
@@ -119,7 +121,24 @@ class BaseModelSerializer(BaseObjectSerializer):
         names.extend([field.name for field in concrete_model._meta.local_fields if field.serialize])
         names.extend([field.name for field in concrete_model._meta.many_to_many if field.serialize])
         return names
+    
+    def get_deserializable_fields_for_object(self, obj):
+        return self.get_fields_for_object(obj.object)
 
+    def _deserialize(self, serialized_obj, instance, field_name):
+        # instance is of DeserializedObject type
+        if not self.follow_object:
+            return self.deserialize(serialized_obj, instance)
+        else:
+            setattr(instance.object, field_name, self.deserialize(serialized_obj))
+            return instance
+
+    def _get_instance(self, obj, instance=None):
+        if instance is None:
+            return base.DeserializedObject(self.create_instance(obj))
+        else:
+            return instance
+    
     def create_instance(self, serialized_obj):
         if self.opts.class_name is not None:
             if isinstance(self.opts.class_name, str):
