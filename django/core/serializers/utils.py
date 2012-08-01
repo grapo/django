@@ -7,7 +7,7 @@ class ObjectWithMetadata(object):
         self.fields = None
 
     def __repr__(self):
-        return "WithMetadata " + self._object.__repr__()
+        return self._object.__repr__()
     def __str__(self):
         return self._object.__str__()
 

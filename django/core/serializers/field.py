@@ -14,9 +14,8 @@ class FieldMetaclass(base.SerializerMetaclass):
     def create_serialize_method(cls, old_serialize, serialize_iterable):
         def serialize(self, obj):
             fields = None
-            if self.original_obj and self.original_field_name:
+            if hasattr(self, 'original_obj') and self.original_field_name:
                 fields = self._serialize_fields(self.original_obj, self.original_field_name)
-            
             if not isinstance(obj, collections.Mapping) and hasattr(obj, '__iter__'):
                 serialized_obj = serialize_iterable(self, obj)
             else:
@@ -41,7 +40,7 @@ class FieldMetaclass(base.SerializerMetaclass):
         
         return deserialize
 
-class BaseField(base.Serializer):
+class BaseField(base.BaseSerializer):
     """ 
     Class that serialize and deserialize object to python native datatype. 
     """
@@ -79,7 +78,7 @@ class BaseField(base.Serializer):
         Object returned by this method must be accepted by serialization
         format or exception will be thrown.
         """
-        return smart_unicode(obj)
+        return obj
 
     def _deserialize(self, serialized_obj, instance, field_name):
         self.set_object(self.deserialize(serialized_obj), instance, field_name)
@@ -124,7 +123,7 @@ class M2mField(Field):
             return getattr(obj, field_name).iterator()
         return field._get_val_from_obj(obj)
     
-    def serialize_itarable(self, obj):
+    def serialize_iterable(self, obj):
         rf = RelatedField()
         for o in obj:
             yield rf.serialize(o._get_pk_val()) 
