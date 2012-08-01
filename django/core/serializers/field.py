@@ -20,10 +20,9 @@ class FieldMetaclass(base.SerializerMetaclass):
                 serialized_obj = serialize_iterable(self, obj)
             else:
                 serialized_obj = old_serialize(self, obj)
-
             if isinstance(serialized_obj, collections.Mapping):
                 return MappingWithMetadata(serialized_obj, self.get_metadata(), fields)
-            elif isinstance(serialized_obj, collections.Iterable):
+            elif hasattr(serialized_obj, '__iter__'):
                 return IterableWithMetadata(serialized_obj, self.get_metadata(), fields)
             else:
                 return ObjectWithMetadata(serialized_obj, self.get_metadata(), fields)

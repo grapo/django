@@ -86,7 +86,7 @@ class SerializerMetaclass(type):
 
             if isinstance(serialized_obj, collections.Mapping):
                 return MappingWithMetadata(serialized_obj, self.get_metadata())
-            elif isinstance(serialized_obj, collections.Iterable):
+            elif hasattr(serialized_obj, '__iter__'):
                 return IterableWithMetadata(serialized_obj, self.get_metadata())
             else:
                 return ObjectWithMetadata(serialized_obj, self.get_metadata())
