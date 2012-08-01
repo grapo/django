@@ -1,18 +1,38 @@
-from django.utils.datastructures import SortedDict
+import collections
+
+class ObjectWithMetadata(object):
+    def __init__(self, obj, metadata=None, fields=None):
+        self._object = obj
+        self.metadata = None
+        self.fields = None
+
+    def __repr__(self):
+        return "WithMetadata " + self._object.__repr__()
+    def __str__(self):
+        return self._object.__str__()
+
+    def __unicode__(self):
+        return self._object.__unicode__()
+
+    def get_object(self):
+        return self._object
+
+class MappingWithMetadata(ObjectWithMetadata, collections.Mapping):
+    def __getitem__(self, key):
+        return self._object.__getitem__(key)
+
+    def __len__(self):
+        return self._object.__len__()
+
+    def __contains__(self, key):
+        return self._object.__contains__(key)
+
+    def __iter__(self):
+        return self._object.__iter__()
 
 
-class DictWithMetadata(SortedDict):
-    """
-    A dict-like object, that can have additional metadata attached.
-    """
-    def __init__(self, *args, **kwargs):
-        super(DictWithMetadata, self).__init__(*args, **kwargs)
-        self.metadata = {}
+class IterableWithMetadata(ObjectWithMetadata, collections.Iterable):
+    def __iter__(self):
+        return self._object.__iter__()
 
-    def set_with_metadata(self, key, value, metadata):
-        self[key] = value
-        self.metadata[key] = metadata
 
-    def items_with_metadata(self):
-        return [(key, value, self.metadata[key])
-        for (key, value) in self.items()]

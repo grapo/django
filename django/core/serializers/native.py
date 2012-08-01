@@ -95,6 +95,7 @@ class ModelSerializerOptions(object):
         self.fields = getattr(options, 'fields', None)
         self.exclude = getattr(options, 'exclude', None)
         self.related_serializer = getattr(options, 'related_serializer', field.RelatedField)
+        self.m2m_serializer = getattr(options, 'm2m_serializer', field.M2mField)
         self.field_serializer = getattr(options, 'field_serializer', field.ModelField)
         self.related_reserialize = getattr(options, 'related_reserialize', None)
         self.class_name = getattr(options, 'class_name', None)
@@ -110,7 +111,9 @@ class ModelSerializerMetaclass(base.SerializerMetaclass):
 class BaseModelSerializer(BaseObjectSerializer):
     def get_object_field_serializer(self, obj, field_name):
         field, model, direct, m2m = obj._meta.get_field_by_name(field_name)
-        if field.rel or m2m:
+        if m2m:
+            return self.opts.m2m_serializer()
+        elif field.rel:
             return self.opts.related_serializer()
         else:
             return self.opts.field_serializer()

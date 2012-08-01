@@ -1,12 +1,13 @@
 """
 Module for abstract serializer/unserializer base classes.
 """
+import collections
 import datetime
 from decimal import Decimal
 
 from django.utils.datastructures import SortedDict
 from django.db import models
-from django.core.serializers.utils import DictWithMetadata
+from django.core.serializers.utils import ObjectWithMetadata, MappingWithMetadata, IterableWithMetadata
 
 
 def is_protected_type(obj):
@@ -69,8 +70,40 @@ class SerializerMetaclass(type):
     """
     def __new__(cls, name, bases, attrs):
         attrs['base_fields'] = get_declared_fields(bases, attrs)
-        return super(SerializerMetaclass,
+        new_class = super(SerializerMetaclass,
                      cls).__new__(cls, name, bases, attrs)
+        new_class.serialize = cls.create_serialize_method(new_class.serialize, new_class.serialize_iterable)
+        new_class.deserialize = cls.create_deserialize_method(new_class.deserialize, new_class.deserialize_iterable)
+        return new_class
+    
+    @classmethod
+    def create_serialize_method(cls, old_serialize, serialize_iterable):
+        def serialize(self, obj):
+            if not isinstance(obj, collections.Mapping) and hasattr(obj, '__iter__'):
+                serialized_obj = serialize_iterable(self, obj)
+            else:
+                serialized_obj = old_serialize(self, obj)
+
+            if isinstance(serialized_obj, collections.Mapping):
+                return MappingWithMetadata(serialized_obj, self.get_metadata())
+            elif isinstance(serialized_obj, collections.Iterable):
+                return IterableWithMetadata(serialized_obj, self.get_metadata())
+            else:
+                return ObjectWithMetadata(serialized_obj, self.get_metadata())
+
+        return serialize
+
+    @classmethod
+    def create_deserialize_method(cls, old_deserialize, deserialize_iterable):
+        def deserialize(self, serialized_obj, instance=None):
+            
+            if not isinstance(serialized_obj, collections.Mapping) and hasattr(serialized_obj, '__iter__'):
+                return deserialize_iterable(self, serialized_obj)
+            else:
+                instance = self._get_instance(serialized_obj, instance)
+                return old_deserialize(self, serialized_obj, instance)
+
+        return deserialize
 
 
 class BaseSerializer(object):
@@ -101,7 +134,7 @@ class BaseSerializer(object):
         """
         return self.base_fields
 
-    def _metadata(self, obj, field_name):
+    def get_metadata(self):
         metadict = {}
         metadict = self.metadata(metadict)
         return metadict
@@ -114,58 +147,39 @@ class BaseSerializer(object):
 
     def _serialize(self, obj, field_name):
         new_obj = self.get_object(obj, field_name)
-        metadict = self._metadata(obj, field_name)
-        return (self.serialize(new_obj), metadict)
+        return  self.serialize(new_obj)
+
+    def serialize_iterable(self, obj):
+        for o in obj:
+            yield self.serialize(o) 
 
     def serialize(self, obj):
         """
         Serializes given object.
-        Handles dict and iterable objects recursively.
-        If object pass is_protected_type test then
-        return it as is else serialize specified object's fields
-        recursively.
-
-        """
-        if is_protected_type(obj):
-            return obj # mayby exception shold be raised (Field serializer should be used)
-        elif isinstance(obj, dict):
-            return dict([(k, self.serialize(v)) for k, v in obj.iteritems()])
-        elif hasattr(obj, '__iter__'):
-            return (self.serialize(o) for o in obj)
-        else:
-            return self.serialize_object(obj)
-
-    def serialize_object(self, obj):
-        """
-        Serializes object to dict where object's fields are 
-        serialized to dict values.
         """
 
         fields = self.get_fields_for_object(obj)
 
-        native = DictWithMetadata()
+        native = SortedDict()
         for field_name, serializer in fields.iteritems():
-            nativ_obj, metadict = serializer._serialize(obj, field_name)
+            nativ_obj = serializer._serialize(obj, field_name)
             if serializer.label:
                 field_name = serializer.label
-            native.set_with_metadata(field_name, nativ_obj, metadict)
+            native[field_name] = nativ_obj
         return native
 
     def get_deserializable_fields_for_object(self, obj): # ugly - how to fix this?
         return self.get_fields_for_object(obj)
 
-    def deserialize(self, serialized_obj, instance=None):
+    
+    def deserialize_iterable(self, obj):
+        for o in obj:
+            yield self.deserialize(o) 
+    
+    def deserialize(self, serialized_obj, instance):
         """
         Deserializes object from give python native datatype.
-
-        If instance is set then it should be used else
-        create new instance and deserialze serialized_obj to this instance.
-        
         """
-        if not isinstance(serialized_obj, dict) and hasattr(serialized_obj, '__iter__'):
-            return (self.deserialize(o) for o in serialized_obj)
-
-        instance = self._get_instance(serialized_obj, instance)
         fields = self.get_deserializable_fields_for_object(instance)
 
         for subfield_name, serializer in fields.iteritems():

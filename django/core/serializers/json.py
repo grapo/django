@@ -14,6 +14,8 @@ from django.utils.timezone import is_aware
 from django.core.serializers import native
 from django.core.serializers import base
 from django.core.serializers import field
+from django.core.serializers.utils import ObjectWithMetadata
+
 
 
 class FieldsSerializer(native.ModelSerializer):
@@ -73,6 +75,8 @@ class DjangoJSONEncoder(json.JSONEncoder):
             return r
         elif isinstance(o, decimal.Decimal):
             return str(o)
+        elif isinstance(o, ObjectWithMetadata):
+            return o.get_object() 
         elif inspect.isgenerator(o):
             return list(o)
         else:
