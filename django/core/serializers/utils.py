@@ -7,7 +7,7 @@ class ObjectWithMetadata(object):
         self.fields = fields or {}
 
     def __repr__(self):
-        return self._object.__repr__()
+        return "<Meta: " + self._object.__repr__() + ">"
     def __str__(self):
         return self._object.__str__()
 
@@ -16,6 +16,12 @@ class ObjectWithMetadata(object):
 
     def get_object(self):
         return self._object
+    
+    def __getattribute__(self, attr):
+        if attr not in ['_object', 'metadata', 'fields', 'get_object']:
+            return self._object.__getattribute__(attr)
+        else:
+            return object.__getattribute__(self, attr)
 
 class MappingWithMetadata(ObjectWithMetadata, collections.MutableMapping):
     def __getitem__(self, key):

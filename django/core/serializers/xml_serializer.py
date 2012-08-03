@@ -31,6 +31,10 @@ class ModelWithAttributes(field.ModelField):
         metadict['attributes'] = ['type', 'name']
         return metadict
 
+    def get_object(self, obj, field_name):
+        field = obj._meta.get_field_by_name(field_name)[0]
+        return field.value_to_string(obj)
+
 class RelField(field.Field):
     def get_object(self, obj, field_name):
         field, _, _, _ = obj._meta.get_field_by_name(field_name)
@@ -51,24 +55,14 @@ class RelatedWithAttributes(field.RelatedField):
         metadict['attributes'] = ['name', 'rel', 'to']
         return metadict
 
-class EmptyField(field.Field):
-    def serialize(self, obj):
-        return {'pk' : obj}
-
-    def metadata(self, metadict):
-        metadict['attributes'] = ['pk']
-        return metadict
+    def serialize_object(self, obj):
+        return smart_unicode(obj)
 
 class M2mWithAttributes(field.M2mField):
     name = NameField() 
     rel = RelField()
     to = ToField()
 
-    def serialize_iterable(self, obj):
-        rf = EmptyField()
-        for o in obj:
-            f = rf.serialize(o._get_pk_val()) 
-            yield f
     def metadata(self, metadict):
         metadict['attributes'] = ['name', 'rel', 'to']
         return metadict
@@ -116,58 +110,110 @@ class NativeFormat(base.NativeFormat):
         xml.startDocument()
         xml.startElement("django-objects", {"version" : "1.0"})
         level = 0
-        self._start_xml(xml, obj, level + 1)
+        self._to_xml(xml, obj, level + 1)
         self.indent(xml, level)
         xml.endElement("django-objects")
         xml.endDocument()
     
         return stream.getvalue()
 
-    def _start_xml(self, xml, data, level, name="object", attributes=None): 
-        if isinstance(data, MappingWithMetadata):
-            for key, value in data.items():
-                elem_name = name if data.metadata.get('as_list', False) else key
-                self._to_xml(xml, value, level + 1, elem_name)
-        elif isinstance(data, IterableWithMetadata):
-            for item in data:
-                self._to_xml(xml, item, level)
-        else:
-            xml.characters(str(data._object))
-
-    def _to_xml(self, xml, data, level, name='object', attributes=None):
-        attributes = attributes or {}
+    def handle_object(self, xml, data, level):
+        name = "object"
+        attributes = {}
         for attr_name  in data.metadata.get('attributes', []):
+            if attr_name in data:
+                attrib = data.pop(attr_name)
+                if attrib._object is not None:
+                    attributes[attr_name] = smart_unicode(attrib)
+                
+        self.indent(xml, level)
+        xml.startElement(name, attributes)
+        for key, value in data['field'].items():
+            self.handle_field(xml, value, level + 1)
+        self.indent(xml, level)
+        xml.endElement(name)
+
+    def handle_field(self, xml, data, level, name="field"):
+        attributes = {}
+        for attr_name  in data.metadata.get('attributes', []):
+            attrib = None
             if attr_name in data.fields:
-                attributes[attr_name] = str(data.fields[attr_name])
+                attrib = data.fields[attr_name]
             elif isinstance(data, MappingWithMetadata) and attr_name in data:
-                attributes[attr_name] = str(data.pop(attr_name))
+                attrib = data.pop(attr_name)
+            
+            if attrib is not None:
+                attributes[attr_name] = attrib
                 
         self.indent(xml, level)
         xml.startElement(name, attributes)
         
-        if isinstance(data, MappingWithMetadata):
-            for key, value in data.items():
-                if value.metadata.get('as_list', False):
-                    self._start_xml(xml, value, level, key)
-                else:
-                    self._to_xml(xml, value, level + 1, key)
-            self.indent(xml, level)
-        elif isinstance(data, IterableWithMetadata):
+        if isinstance(data, IterableWithMetadata):
             for item in data:
-                self._to_xml(xml, item, level + 1)
+                self.handle_m2m_field(xml, item, level + 1)
+
             self.indent(xml, level)
         else:
-            xml.characters(str(data._object))
-        
+            xml.characters(data._object)
         xml.endElement(name)
 
-    
+    def handle_m2m_field(self, xml, data, level, name="object"):
+        attributes = {'pk' : smart_unicode(data._object)}
+        self.indent(xml, level)
+        xml.startElement(name, attributes)
+        xml.endElement(name)
+   
+    def _to_xml(self, xml, data, level): 
+        if isinstance(data, MappingWithMetadata):
+                self.handle_object(xml, data, level)
+        elif isinstance(data, IterableWithMetadata):
+            for item in data:
+                self._to_xml(xml, item, level)
+        else:
+            xml.characters(data._object)
+
     def deserialize(self, obj, **options):
         event_stream = iterparse(StringIO.StringIO(obj), events=['start', 'end'])
         while True:
             event, node = event_stream.next() # will raise StopIteration exception.
             if node.tag == 'django-objects':
                 continue
-            data, node = self._to_python(node, event_stream)
+            data, node = self.de_handle_object(node, event_stream)
             yield data    
+
+    def de_handle_object(self, start_node, event_stream):
+        data = {'field' : {}}
+        while True:
+            event, node = event_stream.next()
+            if event == "end": # end of start_node
+                assert node == start_node
+                data.update(node.attrib)
+                break
+            else:
+                name, value, node = self.de_handle_field(node, event_stream)
+                data['field'][name] = value
+        return data, node
+
+    def de_handle_field(self, start_node, event_stream):
+        event, node = event_stream.next()
+        if event == "end": # end of start_node
+            name = node.attrib['name']
+            data = node.text
+            return name, data, node
+        else: # must be m2m and object starts
+            name = start_node.attrib['name']
+            m2m_pk = []
+            while node.tag != 'field':
+                data = self.de_handle_m2m_field(node, event_stream)
+                m2m_pk.append(data)
+                event, node = event_stream.next()
+            return name, m2m_pk, node
+
+    def de_handle_m2m_field(self, start_node, event_stream):
+        event, node = event_stream.next()
+        return node.attrib['pk']
+
+
+
+
 

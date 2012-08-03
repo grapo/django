@@ -9,42 +9,13 @@ from django.utils.encoding import is_protected_type, smart_unicode
 
 from django.core.serializers.utils import ObjectWithMetadata, MappingWithMetadata, IterableWithMetadata
 
-class FieldMetaclass(base.SerializerMetaclass):
-    @classmethod
-    def create_serialize_method(cls, old_serialize, serialize_iterable):
-        def serialize(self, obj):
-            fields = None
-            if hasattr(self, 'original_obj') and self.original_field_name:
-                fields = self._serialize_fields(self.original_obj, self.original_field_name)
-            if not isinstance(obj, collections.Mapping) and hasattr(obj, '__iter__'):
-                serialized_obj = serialize_iterable(self, obj)
-            else:
-                serialized_obj = old_serialize(self, obj)
-            if isinstance(serialized_obj, collections.Mapping):
-                return MappingWithMetadata(serialized_obj, self.get_metadata(), fields)
-            elif hasattr(serialized_obj, '__iter__'):
-                return IterableWithMetadata(serialized_obj, self.get_metadata(), fields)
-            else:
-                return ObjectWithMetadata(serialized_obj, self.get_metadata(), fields)
 
-        return serialize
-
-    @classmethod
-    def create_deserialize_method(cls, old_deserialize, deserialize_iterable):
-        def deserialize(self, serialized_obj):
-            if not isinstance(serialized_obj, collections.Mapping) and hasattr(serialized_obj, '__iter__'):
-                return deserialize_iterable(self, serialized_obj)
-            else:
-                return old_deserialize(self, serialized_obj)
-        
-        return deserialize
-
-class BaseField(base.BaseSerializer):
+class Field(base.Serializer):
     """ 
     Class that serialize and deserialize object to python native datatype. 
     """
     def __init__(self, label=None):
-        super(BaseField, self).__init__(label=label, follow_object=False)
+        super(Field, self).__init__(label=label, follow_object=False)
 
     def _serialize(self, obj, field_name):
         self.original_obj = obj
@@ -71,6 +42,22 @@ class BaseField(base.BaseSerializer):
         return getattr(obj, field_name, obj)
 
     def serialize(self, obj):
+        fields = None
+        if hasattr(self, 'original_obj') and self.original_field_name:
+            fields = self._serialize_fields(self.original_obj, self.original_field_name)
+        if not isinstance(obj, collections.Mapping) and hasattr(obj, '__iter__'):
+            serialized_obj = self.serialize_iterable(obj)
+        else:
+            serialized_obj = self.serialize_object(obj)
+        
+        if isinstance(serialized_obj, collections.Mapping):
+            return MappingWithMetadata(serialized_obj, self.get_metadata(), fields)
+        elif hasattr(serialized_obj, '__iter__'):
+            return IterableWithMetadata(serialized_obj, self.get_metadata(), fields)
+        else:
+            return ObjectWithMetadata(serialized_obj, self.get_metadata(), fields)
+
+    def serialize_object(self, obj):
         """
         Returns native python datatype.
         
@@ -92,15 +79,18 @@ class BaseField(base.BaseSerializer):
         """
         setattr(instance, field_name, obj)
 
+    def deserialize(self, serialized_obj):
+        if not isinstance(serialized_obj, collections.Mapping) and hasattr(serialized_obj, '__iter__'):
+            return self.deserialize_iterable(serialized_obj)
+        else:
+            return self.deserialize_object(serialized_obj)
     
-    def deserialize(self, obj):
+    
+    def deserialize_object(self, obj):
         """
         Returns object that will be assign as field to instance
         """
         return obj
-
-class Field(BaseField):
-    __metaclass__ = FieldMetaclass
 
 
 class ModelField(Field):
@@ -112,10 +102,31 @@ class ModelField(Field):
         else:
             return field.value_to_string(obj)
 
+    def _deserialize(self, serialized_obj, instance, field_name):
+        field = instance.object._meta.get_field(field_name)
+        self.set_object(self.deserialize(serialized_obj, field), instance, field_name)
+        return instance
+    
+    def deserialize(self, serialized_obj, field):
+        if not isinstance(serialized_obj, collections.Mapping) and hasattr(serialized_obj, '__iter__'):
+            return self.deserialize_iterable(serialized_obj, field)
+        else:
+            return self.deserialize_object(serialized_obj, field)
+
+    def deserialize_iterable(self, obj, field):
+        for o in obj:
+            yield self.deserialize(o, field) 
+
+    def deserialize_object(self, obj, field):
+        if isinstance(obj, str):
+            obj = smart_unicode(obj) # TODO add access to options
+        return field.to_python(obj) 
+
     def set_object(self, obj, instance, field_name):
         setattr(instance.object, field_name, obj)
 
-class M2mField(Field):
+
+class M2mField(ModelField):
     def get_object(self, obj, field_name):
         field, _, _, m2m = obj._meta.get_field_by_name(field_name)
         if m2m and field.rel.through._meta.auto_created:
@@ -128,7 +139,7 @@ class M2mField(Field):
             yield rf.serialize(o._get_pk_val()) 
 
 
-class RelatedField(Field):
+class RelatedField(ModelField):
     def get_object(self, obj, field_name):
         field, _, _, m2m = obj._meta.get_field_by_name(field_name)
         if m2m and field.rel.through._meta.auto_created:
@@ -146,7 +157,7 @@ class RelatedField(Field):
         for o in obj:
             yield self.serialize(o)
 
-    def serialize(self, obj):
+    def serialize_object(self, obj):
         if is_protected_type(obj):
             return obj
         else:
@@ -157,6 +168,10 @@ class PrimaryKeyField(ModelField):
     def get_object(self, obj, field_name):
         return obj._get_pk_val()
 
+    def _deserialize(self, serialized_obj, instance, field_name):
+        field = instance.object._meta.pk
+        self.set_object(self.deserialize(serialized_obj, field), instance, field.attname)
+        return instance
 
 class ModelNameField(Field):
     """

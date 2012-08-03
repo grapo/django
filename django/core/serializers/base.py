@@ -72,39 +72,8 @@ class SerializerMetaclass(type):
         attrs['base_fields'] = get_declared_fields(bases, attrs)
         new_class = super(SerializerMetaclass,
                      cls).__new__(cls, name, bases, attrs)
-        new_class.serialize = cls.create_serialize_method(new_class.serialize, new_class.serialize_iterable)
-        new_class.deserialize = cls.create_deserialize_method(new_class.deserialize, new_class.deserialize_iterable)
+       
         return new_class
-    
-    @classmethod
-    def create_serialize_method(cls, old_serialize, serialize_iterable):
-        def serialize(self, obj):
-            if not isinstance(obj, collections.Mapping) and hasattr(obj, '__iter__'):
-                serialized_obj = serialize_iterable(self, obj)
-            else:
-                serialized_obj = old_serialize(self, obj)
-
-            if isinstance(serialized_obj, collections.Mapping):
-                return MappingWithMetadata(serialized_obj, self.get_metadata())
-            elif hasattr(serialized_obj, '__iter__'):
-                return IterableWithMetadata(serialized_obj, self.get_metadata())
-            else:
-                return ObjectWithMetadata(serialized_obj, self.get_metadata())
-
-        return serialize
-
-    @classmethod
-    def create_deserialize_method(cls, old_deserialize, deserialize_iterable):
-        def deserialize(self, serialized_obj, instance=None):
-            
-            if not isinstance(serialized_obj, collections.Mapping) and hasattr(serialized_obj, '__iter__'):
-                return deserialize_iterable(self, serialized_obj)
-            else:
-                instance = self._get_instance(serialized_obj, instance)
-                return old_deserialize(self, serialized_obj, instance)
-
-        return deserialize
-
 
 class BaseSerializer(object):
     creation_counter = 0
@@ -154,10 +123,22 @@ class BaseSerializer(object):
             yield self.serialize(o) 
 
     def serialize(self, obj):
+        if not isinstance(obj, collections.Mapping) and hasattr(obj, '__iter__'):
+            serialized_obj = self.serialize_iterable(obj)
+        else:
+            serialized_obj = self.serialize_object(obj)
+        
+        if isinstance(serialized_obj, collections.Mapping):
+            return MappingWithMetadata(serialized_obj, self.get_metadata())
+        elif hasattr(serialized_obj, '__iter__'):
+            return IterableWithMetadata(serialized_obj, self.get_metadata())
+        else:
+            return ObjectWithMetadata(serialized_obj, self.get_metadata())
+    
+    def serialize_object(self, obj):
         """
         Serializes given object.
         """
-
         fields = self.get_fields_for_object(obj)
 
         native = SortedDict()
@@ -172,11 +153,18 @@ class BaseSerializer(object):
         return self.get_fields_for_object(obj)
 
     
+    def deserialize(self, serialized_obj, instance=None):
+        if not isinstance(serialized_obj, collections.Mapping) and hasattr(serialized_obj, '__iter__'):
+            return self.deserialize_iterable(serialized_obj)
+        else:
+            instance = self._get_instance(serialized_obj, instance)
+            return self.deserialize_object(serialized_obj, instance)
+    
     def deserialize_iterable(self, obj):
         for o in obj:
             yield self.deserialize(o) 
     
-    def deserialize(self, serialized_obj, instance):
+    def deserialize_object(self, serialized_obj, instance):
         """
         Deserializes object from give python native datatype.
         """
