@@ -1,5 +1,3 @@
-import collections
-
 class ObjectWithMetadata(object):
     def __init__(self, obj, metadata=None, fields=None):
         self._object = obj
@@ -23,7 +21,6 @@ class ObjectWithMetadata(object):
         else:
             return object.__getattribute__(self, attr)
 
-class MappingWithMetadata(ObjectWithMetadata, collections.MutableMapping):
     def __getitem__(self, key):
         return self._object.__getitem__(key)
 
@@ -41,10 +38,4 @@ class MappingWithMetadata(ObjectWithMetadata, collections.MutableMapping):
 
     def __delitem__(self, key):
         return self._object.__delitem__(key)
-
-
-class IterableWithMetadata(ObjectWithMetadata, collections.Iterable):
-    def __iter__(self):
-        return self._object.__iter__()
-
 

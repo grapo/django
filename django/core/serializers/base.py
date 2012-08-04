@@ -7,7 +7,7 @@ from decimal import Decimal
 
 from django.utils.datastructures import SortedDict
 from django.db import models
-from django.core.serializers.utils import ObjectWithMetadata, MappingWithMetadata, IterableWithMetadata
+from django.core.serializers.utils import ObjectWithMetadata
 
 
 def is_protected_type(obj):
@@ -128,12 +128,7 @@ class BaseSerializer(object):
         else:
             serialized_obj = self.serialize_object(obj)
         
-        if isinstance(serialized_obj, collections.Mapping):
-            return MappingWithMetadata(serialized_obj, self.get_metadata())
-        elif hasattr(serialized_obj, '__iter__'):
-            return IterableWithMetadata(serialized_obj, self.get_metadata())
-        else:
-            return ObjectWithMetadata(serialized_obj, self.get_metadata())
+        return ObjectWithMetadata(serialized_obj, self.get_metadata())
     
     def serialize_object(self, obj):
         """

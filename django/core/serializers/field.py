@@ -7,7 +7,7 @@ from django.core.serializers import base
 from django.utils.datastructures import SortedDict
 from django.utils.encoding import is_protected_type, smart_unicode
 
-from django.core.serializers.utils import ObjectWithMetadata, MappingWithMetadata, IterableWithMetadata
+from django.core.serializers.utils import ObjectWithMetadata
 
 
 class Field(base.Serializer):
@@ -50,12 +50,7 @@ class Field(base.Serializer):
         else:
             serialized_obj = self.serialize_object(obj)
         
-        if isinstance(serialized_obj, collections.Mapping):
-            return MappingWithMetadata(serialized_obj, self.get_metadata(), fields)
-        elif hasattr(serialized_obj, '__iter__'):
-            return IterableWithMetadata(serialized_obj, self.get_metadata(), fields)
-        else:
-            return ObjectWithMetadata(serialized_obj, self.get_metadata(), fields)
+        return ObjectWithMetadata(serialized_obj, self.get_metadata(), fields)
 
     def serialize_object(self, obj):
         """

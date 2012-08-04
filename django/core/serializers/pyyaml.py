@@ -13,7 +13,7 @@ from django.utils.datastructures import SortedDict
 from django.core.serializers import native
 from django.core.serializers import base
 from django.core.serializers import field
-from django.core.serializers.utils import ObjectWithMetadata, IterableWithMetadata, MappingWithMetadata
+from django.core.serializers.utils import ObjectWithMetadata
 
 class DjangoSafeDumper(yaml.SafeDumper):
     def represent_decimal(self, data):
@@ -23,8 +23,6 @@ class DjangoSafeDumper(yaml.SafeDumper):
 
 DjangoSafeDumper.add_representer(decimal.Decimal, DjangoSafeDumper.represent_decimal)
 DjangoSafeDumper.add_representer(ObjectWithMetadata, DjangoSafeDumper.represent_object_with_metadata)
-DjangoSafeDumper.add_representer(IterableWithMetadata, DjangoSafeDumper.represent_object_with_metadata)
-DjangoSafeDumper.add_representer(MappingWithMetadata, DjangoSafeDumper.represent_object_with_metadata)
 DjangoSafeDumper.add_representer(types.GeneratorType, yaml.representer.SafeRepresenter.represent_list)
 DjangoSafeDumper.add_representer(SortedDict, yaml.representer.SafeRepresenter.represent_dict)
 

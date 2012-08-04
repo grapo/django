@@ -11,7 +11,7 @@ from django.utils.encoding import smart_unicode
 from django.core.serializers import  native
 from django.core.serializers import base
 from django.core.serializers import field
-from django.core.serializers.utils import IterableWithMetadata, MappingWithMetadata, ObjectWithMetadata
+from django.core.serializers.utils import ObjectWithMetadata
 
 class TypeField(field.Field):
     def get_object(self, obj, field_name):
@@ -139,7 +139,7 @@ class NativeFormat(base.NativeFormat):
             attrib = None
             if attr_name in data.fields:
                 attrib = data.fields[attr_name]
-            elif isinstance(data, MappingWithMetadata) and attr_name in data:
+            elif isinstance(data, dict) and attr_name in data:
                 attrib = data.pop(attr_name)
             
             if attrib is not None:
@@ -148,7 +148,7 @@ class NativeFormat(base.NativeFormat):
         self.indent(xml, level)
         xml.startElement(name, attributes)
         
-        if isinstance(data, IterableWithMetadata):
+        if hasattr(data, '__iter__'):
             for item in data:
                 self.handle_m2m_field(xml, item, level + 1)
 
@@ -164,9 +164,9 @@ class NativeFormat(base.NativeFormat):
         xml.endElement(name)
    
     def _to_xml(self, xml, data, level): 
-        if isinstance(data, MappingWithMetadata):
+        if isinstance(data, dict):
                 self.handle_object(xml, data, level)
-        elif isinstance(data, IterableWithMetadata):
+        elif hasattr(data, '__iter__'):
             for item in data:
                 self._to_xml(xml, item, level)
         else:
