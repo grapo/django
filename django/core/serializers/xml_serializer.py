@@ -104,9 +104,8 @@ class NativeFormat(base.NativeFormat):
     def indent(self, xml, level):
         xml.ignorableWhitespace('\n' + ' ' * 4 * level)
     
-    def serialize(self, obj, **options):
-        stream = StringIO.StringIO()
-        xml = SimplerXMLGenerator(stream, settings.DEFAULT_CHARSET)
+    def serialize_objects(self, obj):
+        xml = SimplerXMLGenerator(self.stream, settings.DEFAULT_CHARSET)
         xml.startDocument()
         xml.startElement("django-objects", {"version" : "1.0"})
         level = 0
@@ -115,8 +114,6 @@ class NativeFormat(base.NativeFormat):
         xml.endElement("django-objects")
         xml.endDocument()
     
-        return stream.getvalue()
-
     def handle_object(self, xml, data, level):
         name = "object"
         attributes = {}

@@ -40,12 +40,27 @@ class Serializer(native.ModelSerializer):
         fields = ()
         class_name = "model"
 
+def unpack_object(obj):
+    if hasattr(obj, 'get_object'):
+        obj = obj._object
+    else:
+        return obj
+    if isinstance(obj, dict):
+        for key in obj.keys():
+            obj[key] = unpack_object(obj[key])
+        return obj
+    elif hasattr(obj, '__iter__'):
+        return (unpack_object(o) for o in obj)
+    else:
+        return obj
 
 class NativeFormat(base.NativeFormat):
-    def serialize(self, obj, **options):
-        options.pop('stream', None)
-        options.pop('fields', None)
-        return json.dumps(obj, cls=DjangoJSONEncoder, **options)
+    def serialize_objects(self, obj):
+        if json.__version__.split('.') >= ['2', '1', '3']:
+            # Use JS strings to represent Python Decimal instances (ticket #16850)
+            self.options.update({'use_decimal': False})
+        obj = unpack_object(obj)
+        json.dump(obj, self.stream, cls=DjangoJSONEncoder, **self.options)
 
     def deserialize(self, obj, **options):
         return json.loads(obj, **options)

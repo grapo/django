@@ -3,6 +3,7 @@ Module for abstract serializer/unserializer base classes.
 """
 import collections
 import datetime
+from io import BytesIO
 from decimal import Decimal
 
 from django.utils.datastructures import SortedDict
@@ -197,8 +198,20 @@ class Serializer(BaseSerializer):
 
 class NativeFormat(object):
     def serialize(self, objects, **options):
-        return objects
+        self.stream = options.pop("stream", BytesIO())
+        options.pop('fields', None)
+        self.options = options
+        self.serialize_objects(objects)
+        return self.getvalue()
 
+    def getvalue(self):
+        """
+        Return the fully serialized queryset (or None if the output stream is
+        not seekable).
+        """
+        if callable(getattr(self.stream, 'getvalue', None)):
+            return self.stream.getvalue()
+    
     def deserialize(self, stream, **options):
         return stream
 

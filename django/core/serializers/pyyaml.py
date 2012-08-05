@@ -49,10 +49,8 @@ class Serializer(native.ModelSerializer):
         class_name = "model"
 
 class NativeFormat(base.NativeFormat):
-    def serialize(self, obj, **options):
-        options.pop('stream', None)
-        options.pop('fields', None)
-        return yaml.dump(obj, Dumper=DjangoSafeDumper, **options)
+    def serialize_objects(self, obj):
+        yaml.dump(obj, self.stream, Dumper=DjangoSafeDumper, **self.options)
 
     def deserialize(self, obj, **options):
         return yaml.safe_load(obj)
