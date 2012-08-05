@@ -158,7 +158,7 @@ class NativeSerializersTests(TestCase):
         
         self.assertEqual(article.pub_date, self.a1.pub_date)
 
-    
+
 class SerializersTestBase(object):
     @staticmethod
     def _comparison_value(value):
@@ -420,6 +420,52 @@ class XmlSerializerTestCase(SerializersTestBase, TestCase):
                     temp.append(child.nodeValue)
                 ret_list.append("".join(temp))
         return ret_list
+
+class NewXmlSerializerTestCase(SerializersTestBase, TestCase):
+    serializer_name = "new_xml"
+    pkless_str = b"""<?xml version="1.0" encoding="utf-8"?>
+<django-objects version="1.0">
+    <object model="serializers.category">
+        <name type="CharField">Reference</name>
+    </object>
+</django-objects>"""
+
+    @staticmethod
+    def _comparison_value(value):
+        # The XML serializer handles everything as strings, so comparisons
+        # need to be performed on the stringified value
+        return unicode(value)
+
+    @staticmethod
+    def _validate_output(serial_str):
+        try:
+            minidom.parseString(serial_str)
+        except Exception:
+            return False
+        else:
+            return True
+
+    @staticmethod
+    def _get_pk_values(serial_str):
+        ret_list = []
+        dom = minidom.parseString(serial_str)
+        fields = dom.getElementsByTagName("object")
+        for field in fields:
+            ret_list.append(field.getAttribute("pk"))
+        return ret_list
+
+    @staticmethod
+    def _get_field_values(serial_str, field_name):
+        ret_list = []
+        dom = minidom.parseString(serial_str)
+        fields = dom.getElementsByTagName(field_name)
+        for field in fields:
+            temp = []
+            for child in field.childNodes:
+                temp.append(child.nodeValue)
+            ret_list.append("".join(temp))
+        return ret_list
+
 
 class XmlSerializerTransactionTestCase(SerializersTransactionTestBase, TransactionTestCase):
     serializer_name = "xml"
