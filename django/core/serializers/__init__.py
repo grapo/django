@@ -27,6 +27,7 @@ __all__= ['Field', 'ModelSerializer', 'ObjectSerializer']
 # Built-in serializers
 BUILTIN_SERIALIZERS = {
     "xml"    : "django.core.serializers.xml_serializer",
+    "new_xml"    : "django.core.serializers.new_xml_serializer",
     "python" : "django.core.serializers.python",
     "json"   : "django.core.serializers.json",
 }

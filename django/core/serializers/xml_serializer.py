@@ -212,8 +212,3 @@ class NativeFormat(base.NativeFormat):
     def de_handle_m2m_field(self, start_node, event_stream):
         event, node = event_stream.next()
         return node.attrib['pk']
-
-
-
-
-
