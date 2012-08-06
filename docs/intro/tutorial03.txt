@@ -400,7 +400,7 @@ like:
     <h1>{{ poll.question }}</h1>
     <ul>
     {% for choice in poll.choice_set.all %}
-        <li>{{ choice.choice }}</li>
+        <li>{{ choice.choice_text }}</li>
     {% endfor %}
     </ul>
 
@@ -412,7 +412,7 @@ list-index lookup.
 
 Method-calling happens in the :ttag:`{% for %}<for>` loop:
 ``poll.choice_set.all`` is interpreted as the Python code
-``poll.choice_set.all()``, which returns an iterable of Choice objects and is
+``poll.choice_set.all()``, which returns an iterable of ``Choice`` objects and is
 suitable for use in the :ttag:`{% for %}<for>` tag.
 
 See the :doc:`template guide </topics/templates>` for more about templates.
@@ -532,6 +532,23 @@ own URLconf, they can be placed under "/polls/", or under "/fun_polls/", or
 under "/content/polls/", or any other path root, and the app will still work.
 
 All the poll app cares about is its relative path, not its absolute path.
+
+Removing hardcoded URLs in templates
+------------------------------------
+
+Remember, when we wrote the link to a poll in our template, the link was
+partially hardcoded like this:
+
+.. code-block:: html+django
+
+    <li><a href="/polls/{{ poll.id }}/">{{ poll.question }}</a></li>
+
+To use the decoupled URLs we've just introduced, replace the hardcoded link
+with the :ttag:`url` template tag:
+
+.. code-block:: html+django
+
+    <li><a href="{% url 'polls.views.detail' poll.id %}">{{ poll.question }}</a></li>
 
 When you're comfortable with writing views, read :doc:`part 4 of this tutorial
 </intro/tutorial04>` to learn about simple form processing and generic views.

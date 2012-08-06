@@ -1,17 +1,20 @@
+from __future__ import unicode_literals
+
 import re
 import unicodedata
 import warnings
 from gzip import GzipFile
-from htmlentitydefs import name2codepoint
+from django.utils.six.moves import html_entities
 from io import BytesIO
 
 from django.utils.encoding import force_unicode
 from django.utils.functional import allow_lazy, SimpleLazyObject
+from django.utils import six
 from django.utils.translation import ugettext_lazy, ugettext as _, pgettext
 
 # Capitalizes the first letter of a string.
 capfirst = lambda x: x and force_unicode(x)[0].upper() + force_unicode(x)[1:]
-capfirst = allow_lazy(capfirst, unicode)
+capfirst = allow_lazy(capfirst, six.text_type)
 
 # Set up regular expressions
 re_words = re.compile(r'&.*?;|<.*?>|(\w[\w-]*)', re.U|re.S)
@@ -43,8 +46,8 @@ def wrap(text, width):
                 if len(lines) > 1:
                     pos = len(lines[-1])
             yield word
-    return u''.join(_generator())
-wrap = allow_lazy(wrap, unicode)
+    return ''.join(_generator())
+wrap = allow_lazy(wrap, six.text_type)
 
 
 class Truncator(SimpleLazyObject):
@@ -58,7 +61,7 @@ class Truncator(SimpleLazyObject):
         if truncate is None:
             truncate = pgettext(
                 'String to return when truncating text',
-                u'%(truncated_text)s...')
+                '%(truncated_text)s...')
         truncate = force_unicode(truncate)
         if '%(truncated_text)s' in truncate:
             return truncate % {'truncated_text': text}
@@ -130,8 +133,8 @@ class Truncator(SimpleLazyObject):
         words = self._wrapped.split()
         if len(words) > length:
             words = words[:length]
-            return self.add_truncation_text(u' '.join(words), truncate)
-        return u' '.join(words)
+            return self.add_truncation_text(' '.join(words), truncate)
+        return ' '.join(words)
 
     def _html_words(self, length, truncate):
         """
@@ -142,7 +145,7 @@ class Truncator(SimpleLazyObject):
         Newlines in the HTML are preserved.
         """
         if length <= 0:
-            return u''
+            return ''
         html4_singlets = (
             'br', 'col', 'link', 'base', 'img',
             'param', 'area', 'hr', 'input'
@@ -205,14 +208,14 @@ def truncate_words(s, num, end_text='...'):
         'in django.utils.text instead.', category=DeprecationWarning)
     truncate = end_text and ' %s' % end_text or ''
     return Truncator(s).words(num, truncate=truncate)
-truncate_words = allow_lazy(truncate_words, unicode)
+truncate_words = allow_lazy(truncate_words, six.text_type)
 
 def truncate_html_words(s, num, end_text='...'):
     warnings.warn('This function has been deprecated. Use the Truncator class '
         'in django.utils.text instead.', category=DeprecationWarning)
     truncate = end_text and ' %s' % end_text or ''
     return Truncator(s).words(num, truncate=truncate, html=True)
-truncate_html_words = allow_lazy(truncate_html_words, unicode)
+truncate_html_words = allow_lazy(truncate_html_words, six.text_type)
 
 def get_valid_filename(s):
     """
@@ -221,36 +224,36 @@ def get_valid_filename(s):
     spaces are converted to underscores; and anything that is not a unicode
     alphanumeric, dash, underscore, or dot, is removed.
     >>> get_valid_filename("john's portrait in 2004.jpg")
-    u'johns_portrait_in_2004.jpg'
+    'johns_portrait_in_2004.jpg'
     """
     s = force_unicode(s).strip().replace(' ', '_')
     return re.sub(r'(?u)[^-\w.]', '', s)
-get_valid_filename = allow_lazy(get_valid_filename, unicode)
+get_valid_filename = allow_lazy(get_valid_filename, six.text_type)
 
-def get_text_list(list_, last_word=ugettext_lazy(u'or')):
+def get_text_list(list_, last_word=ugettext_lazy('or')):
     """
     >>> get_text_list(['a', 'b', 'c', 'd'])
-    u'a, b, c or d'
+    'a, b, c or d'
     >>> get_text_list(['a', 'b', 'c'], 'and')
-    u'a, b and c'
+    'a, b and c'
     >>> get_text_list(['a', 'b'], 'and')
-    u'a and b'
+    'a and b'
     >>> get_text_list(['a'])
-    u'a'
+    'a'
     >>> get_text_list([])
-    u''
+    ''
     """
-    if len(list_) == 0: return u''
+    if len(list_) == 0: return ''
     if len(list_) == 1: return force_unicode(list_[0])
-    return u'%s %s %s' % (
+    return '%s %s %s' % (
         # Translators: This string is used as a separator between list elements
         _(', ').join([force_unicode(i) for i in list_][:-1]),
         force_unicode(last_word), force_unicode(list_[-1]))
-get_text_list = allow_lazy(get_text_list, unicode)
+get_text_list = allow_lazy(get_text_list, six.text_type)
 
 def normalize_newlines(text):
     return force_unicode(re.sub(r'\r\n|\r|\n', '\n', text))
-normalize_newlines = allow_lazy(normalize_newlines, unicode)
+normalize_newlines = allow_lazy(normalize_newlines, six.text_type)
 
 def recapitalize(text):
     "Recapitalizes text, placing caps after end-of-sentence punctuation."
@@ -267,7 +270,7 @@ def phone2numeric(phone):
          'n': '6', 'o': '6', 'p': '7', 'q': '7', 'r': '7', 's': '7', 't': '8',
          'u': '8', 'v': '8', 'w': '9', 'x': '9', 'y': '9', 'z': '9',
         }
-    return u''.join(char2number.get(c, c) for c in phone.lower())
+    return ''.join(char2number.get(c, c) for c in phone.lower())
 phone2numeric = allow_lazy(phone2numeric)
 
 # From http://www.xhaus.com/alan/python/httpcomp.html#gzip
@@ -279,16 +282,16 @@ def compress_string(s):
     zfile.close()
     return zbuf.getvalue()
 
-ustring_re = re.compile(u"([\u0080-\uffff])")
+ustring_re = re.compile("([\u0080-\uffff])")
 
 def javascript_quote(s, quote_double_quotes=False):
 
     def fix(match):
-        return r"\u%04x" % ord(match.group(1))
+        return b"\u%04x" % ord(match.group(1))
 
-    if type(s) == str:
+    if type(s) == bytes:
         s = s.decode('utf-8')
-    elif type(s) != unicode:
+    elif type(s) != six.text_type:
         raise TypeError(s)
     s = s.replace('\\', '\\\\')
     s = s.replace('\r', '\\r')
@@ -298,7 +301,7 @@ def javascript_quote(s, quote_double_quotes=False):
     if quote_double_quotes:
         s = s.replace('"', '&quot;')
     return str(ustring_re.sub(fix, s))
-javascript_quote = allow_lazy(javascript_quote, unicode)
+javascript_quote = allow_lazy(javascript_quote, six.text_type)
 
 # Expression to match some_token and some_token="with spaces" (and similarly
 # for single-quoted strings).
@@ -321,23 +324,23 @@ def smart_split(text):
     be further processed with unescape_string_literal()).
 
     >>> list(smart_split(r'This is "a person\'s" test.'))
-    [u'This', u'is', u'"a person\\\'s"', u'test.']
+    ['This', 'is', '"a person\\\'s"', 'test.']
     >>> list(smart_split(r"Another 'person\'s' test."))
-    [u'Another', u"'person\\'s'", u'test.']
+    ['Another', "'person\\'s'", 'test.']
     >>> list(smart_split(r'A "\"funky\" style" test.'))
-    [u'A', u'"\\"funky\\" style"', u'test.']
+    ['A', '"\\"funky\\" style"', 'test.']
     """
     text = force_unicode(text)
     for bit in smart_split_re.finditer(text):
         yield bit.group(0)
-smart_split = allow_lazy(smart_split, unicode)
+smart_split = allow_lazy(smart_split, six.text_type)
 
 def _replace_entity(match):
     text = match.group(1)
-    if text[0] == u'#':
+    if text[0] == '#':
         text = text[1:]
         try:
-            if text[0] in u'xX':
+            if text[0] in 'xX':
                 c = int(text[1:], 16)
             else:
                 c = int(text)
@@ -346,7 +349,7 @@ def _replace_entity(match):
             return match.group(0)
     else:
         try:
-            return unichr(name2codepoint[text])
+            return unichr(html_entities.name2codepoint[text])
         except (ValueError, KeyError):
             return match.group(0)
 
@@ -354,7 +357,7 @@ _entity_re = re.compile(r"&(#?[xX]?(?:[0-9a-fA-F]+|\w{1,8}));")
 
 def unescape_entities(text):
     return _entity_re.sub(_replace_entity, text)
-unescape_entities = allow_lazy(unescape_entities, unicode)
+unescape_entities = allow_lazy(unescape_entities, six.text_type)
 
 def unescape_string_literal(s):
     r"""

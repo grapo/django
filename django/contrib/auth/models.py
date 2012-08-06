@@ -1,11 +1,12 @@
-import urllib
+from __future__ import unicode_literals
 
 from django.core.exceptions import ImproperlyConfigured
 from django.core.mail import send_mail
 from django.db import models
 from django.db.models.manager import EmptyManager
 from django.utils.crypto import get_random_string
-from django.utils.encoding import smart_str
+from django.utils.http import urlquote
+from django.utils import six
 from django.utils.translation import ugettext_lazy as _
 from django.utils import timezone
 
@@ -76,10 +77,10 @@ class Permission(models.Model):
                     'codename')
 
     def __unicode__(self):
-        return u"%s | %s | %s" % (
-            unicode(self.content_type.app_label),
-            unicode(self.content_type),
-            unicode(self.name))
+        return "%s | %s | %s" % (
+            six.text_type(self.content_type.app_label),
+            six.text_type(self.content_type),
+            six.text_type(self.name))
 
     def natural_key(self):
         return (self.codename,) + self.content_type.natural_key()
@@ -265,7 +266,7 @@ class User(models.Model):
         return (self.username,)
 
     def get_absolute_url(self):
-        return "/users/%s/" % urllib.quote(smart_str(self.username))
+        return "/users/%s/" % urlquote(self.username)
 
     def is_anonymous(self):
         """
@@ -285,7 +286,7 @@ class User(models.Model):
         """
         Returns the first_name plus the last_name, with a space in between.
         """
-        full_name = u'%s %s' % (self.first_name, self.last_name)
+        full_name = '%s %s' % (self.first_name, self.last_name)
         return full_name.strip()
 
     def set_password(self, raw_password):
@@ -298,7 +299,7 @@ class User(models.Model):
         """
         def setter(raw_password):
             self.set_password(raw_password)
-            self.save()
+            self.save(update_fields=["password"])
         return check_password(raw_password, self.password, setter)
 
     def set_unusable_password(self):
@@ -419,7 +420,7 @@ class AnonymousUser(object):
         return 'AnonymousUser'
 
     def __str__(self):
-        return unicode(self).encode('utf-8')
+        return six.text_type(self).encode('utf-8')
 
     def __eq__(self, other):
         return isinstance(other, self.__class__)

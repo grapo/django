@@ -1,9 +1,13 @@
+from __future__ import unicode_literals
 import hashlib
 import os
 import posixpath
 import re
-from urllib import unquote
-from urlparse import urlsplit, urlunsplit, urldefrag
+try:
+    from urllib.parse import unquote, urlsplit, urlunsplit, urldefrag
+except ImportError:     # Python 2
+    from urllib import unquote
+    from urlparse import urlsplit, urlunsplit, urldefrag
 
 from django.conf import settings
 from django.core.cache import (get_cache, InvalidCacheBackendError,
@@ -44,10 +48,11 @@ class StaticFilesStorage(FileSystemStorage):
 
 
 class CachedFilesMixin(object):
+    default_template = """url("%s")"""
     patterns = (
         ("*.css", (
-            r"""(url\(['"]{0,1}\s*(.*?)["']{0,1}\))""",
-            r"""(@import\s*["']\s*(.*?)["'])""",
+            br"""(url\(['"]{0,1}\s*(.*?)["']{0,1}\))""",
+            (br"""(@import\s*["']\s*(.*?)["'])""", """@import url("%s")"""),
         )),
     )
 
@@ -61,8 +66,12 @@ class CachedFilesMixin(object):
         self._patterns = SortedDict()
         for extension, patterns in self.patterns:
             for pattern in patterns:
+                if isinstance(pattern, (tuple, list)):
+                    pattern, template = pattern
+                else:
+                    template = self.default_template
                 compiled = re.compile(pattern)
-                self._patterns.setdefault(extension, []).append(compiled)
+                self._patterns.setdefault(extension, []).append((compiled, template))
 
     def file_hash(self, name, content=None):
         """
@@ -91,8 +100,8 @@ class CachedFilesMixin(object):
         root, ext = os.path.splitext(filename)
         file_hash = self.file_hash(clean_name, content)
         if file_hash is not None:
-            file_hash = u".%s" % file_hash
-        hashed_name = os.path.join(path, u"%s%s%s" %
+            file_hash = ".%s" % file_hash
+        hashed_name = os.path.join(path, "%s%s%s" %
                                    (root, file_hash, ext))
         unparsed_name = list(parsed_name)
         unparsed_name[2] = hashed_name
@@ -103,7 +112,7 @@ class CachedFilesMixin(object):
         return urlunsplit(unparsed_name)
 
     def cache_key(self, name):
-        return u'staticfiles:%s' % hashlib.md5(smart_str(name)).hexdigest()
+        return 'staticfiles:%s' % hashlib.md5(smart_str(name)).hexdigest()
 
     def url(self, name, force=False):
         """
@@ -139,10 +148,13 @@ class CachedFilesMixin(object):
 
         return unquote(final_url)
 
-    def url_converter(self, name):
+    def url_converter(self, name, template=None):
         """
         Returns the custom URL converter for the given file name.
         """
+        if template is None:
+            template = self.default_template
+
         def converter(matchobj):
             """
             Converts the matched URL depending on the parent level (`..`)
@@ -152,7 +164,7 @@ class CachedFilesMixin(object):
             matched, url = matchobj.groups()
             # Completely ignore http(s) prefixed URLs,
             # fragments and data-uri URLs
-            if url.startswith(('#', 'http:', 'https:', 'data:')):
+            if url.startswith(('#', 'http:', 'https:', 'data:', '//')):
                 return matched
             name_parts = name.split(os.sep)
             # Using posix normpath here to remove duplicates
@@ -177,7 +189,8 @@ class CachedFilesMixin(object):
             relative_url = '/'.join(url.split('/')[:-1] + file_name)
 
             # Return the hashed version to the file
-            return 'url("%s")' % unquote(relative_url)
+            return template % unquote(relative_url)
+
         return converter
 
     def post_process(self, paths, dry_run=False, **options):
@@ -227,10 +240,10 @@ class CachedFilesMixin(object):
 
                 # ..to apply each replacement pattern to the content
                 if name in adjustable_paths:
-                    content = original_file.read()
-                    converter = self.url_converter(name)
+                    content = original_file.read().decode(settings.FILE_CHARSET)
                     for patterns in self._patterns.values():
-                        for pattern in patterns:
+                        for pattern, template in patterns:
+                            converter = self.url_converter(name, template)
                             content = pattern.sub(converter, content)
                     if hashed_file_exists:
                         self.delete(hashed_name)

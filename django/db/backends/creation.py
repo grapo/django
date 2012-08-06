@@ -26,7 +26,7 @@ class BaseDatabaseCreation(object):
         Generates a 32-bit digest of a set of arguments that can be used to
         shorten identifying names.
         """
-        return '%x' % (abs(hash(args)) % 4294967296L)  # 2**32
+        return '%x' % (abs(hash(args)) % 4294967296)    # 2**32
 
     def sql_create_model(self, model, style, known_models=set()):
         """
@@ -263,9 +263,6 @@ class BaseDatabaseCreation(object):
 
         self.connection.close()
         self.connection.settings_dict["NAME"] = test_database_name
-
-        # Confirm the feature set of the test database
-        self.connection.features.confirm()
 
         # Report syncdb messages at one level lower than that requested.
         # This ensures we don't get flooded with messages during testing

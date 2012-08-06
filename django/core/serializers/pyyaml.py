@@ -10,11 +10,13 @@ import types
 from io import StringIO
 
 from django.utils.datastructures import SortedDict
+from django.utils import six
 
 from django.core.serializers import native
 from django.core.serializers import base
 from django.core.serializers import field
 from django.core.serializers.utils import ObjectWithMetadata
+
 
 class DjangoSafeDumper(yaml.SafeDumper):
     def represent_decimal(self, data):
@@ -56,9 +58,8 @@ class NativeFormat(base.NativeFormat):
     def deserialize_stream(self, stream_or_string):
         if isinstance(stream_or_string, bytes):
             stream_or_string = stream_or_string.decode('utf-8')
-        if isinstance(stream_or_string, basestring):
+        if isinstance(stream_or_string, six.string_types):
             stream = StringIO(stream_or_string)
         else:
             stream = stream_or_string
         return yaml.safe_load(stream)
-

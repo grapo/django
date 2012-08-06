@@ -63,10 +63,10 @@ class ConditionalGet(TestCase):
 
     def testIfMatch(self):
         self.client.defaults['HTTP_IF_MATCH'] = '"%s"' % ETAG
-        response = self.client.put('/condition/etag/', {'data': ''})
+        response = self.client.put('/condition/etag/')
         self.assertEqual(response.status_code, 200)
         self.client.defaults['HTTP_IF_MATCH'] = '"%s"' % EXPIRED_ETAG
-        response = self.client.put('/condition/etag/', {'data': ''})
+        response = self.client.put('/condition/etag/')
         self.assertEqual(response.status_code, 412)
 
     def testBothHeaders(self):
@@ -143,14 +143,14 @@ class HttpDateProcessing(unittest.TestCase):
     def testParsingRfc1123(self):
         parsed = parse_http_date('Sun, 06 Nov 1994 08:49:37 GMT')
         self.assertEqual(datetime.utcfromtimestamp(parsed),
-                         datetime(1994, 11, 06, 8, 49, 37))
+                         datetime(1994, 11, 6, 8, 49, 37))
 
     def testParsingRfc850(self):
         parsed = parse_http_date('Sunday, 06-Nov-94 08:49:37 GMT')
         self.assertEqual(datetime.utcfromtimestamp(parsed),
-                         datetime(1994, 11, 06, 8, 49, 37))
+                         datetime(1994, 11, 6, 8, 49, 37))
 
     def testParsingAsctime(self):
         parsed = parse_http_date('Sun Nov  6 08:49:37 1994')
         self.assertEqual(datetime.utcfromtimestamp(parsed),
-                         datetime(1994, 11, 06, 8, 49, 37))
+                         datetime(1994, 11, 6, 8, 49, 37))

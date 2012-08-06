@@ -4,12 +4,14 @@ Multi-part parsing for file uploads.
 Exposes one class, ``MultiPartParser``, which feeds chunks of uploaded data to
 file upload handlers for processing.
 """
+from __future__ import unicode_literals
 
 import cgi
 from django.conf import settings
 from django.core.exceptions import SuspiciousOperation
 from django.utils.datastructures import MultiValueDict
 from django.utils.encoding import force_unicode
+from django.utils import six
 from django.utils.text import unescape_entities
 from django.core.files.uploadhandler import StopUpload, SkipFile, StopFutureHandlers
 
@@ -59,7 +61,7 @@ class MultiPartParser(object):
             raise MultiPartParserError('Invalid Content-Type: %s' % content_type)
 
         # Parse the header to get the boundary to split the parts.
-        ctypes, opts = parse_header(content_type)
+        ctypes, opts = parse_header(content_type.encode('ascii'))
         boundary = opts.get('boundary')
         if not boundary or not cgi.valid_boundary(boundary):
             raise MultiPartParserError('Invalid boundary in multipart: %s' % boundary)
@@ -76,6 +78,8 @@ class MultiPartParser(object):
             # This means we shouldn't continue...raise an error.
             raise MultiPartParserError("Invalid content length: %r" % content_length)
 
+        if isinstance(boundary, six.text_type):
+            boundary = boundary.encode('ascii')
         self._boundary = boundary
         self._input_data = input_data
 
@@ -589,14 +593,17 @@ class Parser(object):
             yield parse_boundary_stream(sub_stream, 1024)
 
 def parse_header(line):
-    """ Parse the header into a key-value. """
+    """ Parse the header into a key-value.
+        Input (line): bytes, output: unicode for key/name, bytes for value which
+        will be decoded later
+    """
     plist = _parse_header_params(b';' + line)
-    key = plist.pop(0).lower()
+    key = plist.pop(0).lower().decode('ascii')
     pdict = {}
     for p in plist:
         i = p.find(b'=')
         if i >= 0:
-            name = p[:i].strip().lower()
+            name = p[:i].strip().lower().decode('ascii')
             value = p[i+1:].strip()
             if len(value) >= 2 and value[0] == value[-1] == b'"':
                 value = value[1:-1]

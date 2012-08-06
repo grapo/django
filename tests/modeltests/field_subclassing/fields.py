@@ -1,7 +1,10 @@
+from __future__ import unicode_literals
+
 import json
 
 from django.db import models
 from django.utils.encoding import force_unicode
+from django.utils import six
 
 
 class Small(object):
@@ -13,10 +16,10 @@ class Small(object):
         self.first, self.second = first, second
 
     def __unicode__(self):
-        return u'%s%s' % (force_unicode(self.first), force_unicode(self.second))
+        return '%s%s' % (force_unicode(self.first), force_unicode(self.second))
 
     def __str__(self):
-        return unicode(self).encode('utf-8')
+        return six.text_type(self).encode('utf-8')
 
 class SmallField(models.Field):
     """
@@ -39,7 +42,7 @@ class SmallField(models.Field):
         return Small(value[0], value[1])
 
     def get_db_prep_save(self, value, connection):
-        return unicode(value)
+        return six.text_type(value)
 
     def get_prep_lookup(self, lookup_type, value):
         if lookup_type == 'exact':
@@ -64,7 +67,7 @@ class JSONField(models.TextField):
         if not value:
             return None
 
-        if isinstance(value, basestring):
+        if isinstance(value, six.string_types):
             value = json.loads(value)
         return value
 

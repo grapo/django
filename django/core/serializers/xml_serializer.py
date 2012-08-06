@@ -6,8 +6,8 @@ from xml.etree.ElementTree import iterparse
 
 from django.conf import settings
 from django.utils.xmlutils import SimplerXMLGenerator
-#from xml.dom import pulldom
 from django.utils.encoding import smart_unicode
+
 from django.core.serializers import  native
 from django.core.serializers import base
 from django.core.serializers import field

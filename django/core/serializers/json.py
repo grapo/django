@@ -10,6 +10,7 @@ import decimal
 import json
 import inspect
 
+from django.utils import six
 from django.utils.timezone import is_aware
 
 from django.core.serializers import native
@@ -30,16 +31,15 @@ class Serializer(native.ModelSerializer):
     model = field.ModelNameField() 
     fields = FieldsSerializer(follow_object=False)
 
-
     def __init__(self, label=None, follow_object=True, **kwargs):
         super(Serializer, self).__init__(label, follow_object)
         # should this be rewrited?
         self.base_fields['fields'].opts = native.make_options(self.base_fields['fields']._meta, **kwargs)
         
-
     class Meta:
         fields = ()
         class_name = "model"
+
 
 def unpack_object(obj):
     if hasattr(obj, 'get_object'):
@@ -55,6 +55,7 @@ def unpack_object(obj):
     else:
         return obj
 
+
 class NativeFormat(base.NativeFormat):
     def serialize_objects(self, obj):
         if json.__version__.split('.') >= ['2', '1', '3']:
@@ -67,7 +68,7 @@ class NativeFormat(base.NativeFormat):
         if isinstance(stream_or_string, bytes):
             stream_or_string = stream_or_string.decode('utf-8')
         
-        if isinstance(stream_or_string, basestring):
+        if isinstance(stream_or_string, six.string_types):
             return json.loads(stream_or_string)
         else:
             return json.load(stream_or_string)

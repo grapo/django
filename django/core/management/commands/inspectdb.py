@@ -3,6 +3,7 @@ from optparse import make_option
 
 from django.core.management.base import NoArgsCommand, CommandError
 from django.db import connections, DEFAULT_DB_ALIAS
+from django.utils import six
 
 class Command(NoArgsCommand):
     help = "Introspects the database tables in the given database and outputs a Django model module."
@@ -26,6 +27,8 @@ class Command(NoArgsCommand):
 
     def handle_inspection(self, options):
         connection = connections[options.get('database')]
+        # 'table_name_filter' is a stealth option
+        table_name_filter = options.get('table_name_filter')
 
         table2model = lambda table_name: table_name.title().replace('_', '').replace(' ', '').replace('-', '')
 
@@ -43,6 +46,9 @@ class Command(NoArgsCommand):
         yield ''
         known_models = []
         for table_name in connection.introspection.table_names(cursor):
+            if table_name_filter is not None and callable(table_name_filter):
+                if not table_name_filter(table_name):
+                    continue
             yield 'class %s(models.Model):' % table2model(table_name)
             known_models.append(table2model(table_name))
             try:
@@ -110,7 +116,7 @@ class Command(NoArgsCommand):
 
                 if att_name[0].isdigit():
                     att_name = 'number_%s' % att_name
-                    extra_params['db_column'] = unicode(column_name)
+                    extra_params['db_column'] = six.text_type(column_name)
                     comment_notes.append("Field renamed because it wasn't a "
                         "valid Python identifier.")
 

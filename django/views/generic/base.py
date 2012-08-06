@@ -1,3 +1,5 @@
+from __future__ import unicode_literals
+
 from functools import update_wrapper
 from django import http
 from django.core.exceptions import ImproperlyConfigured
@@ -44,11 +46,11 @@ class View(object):
         # sanitize keyword arguments
         for key in initkwargs:
             if key in cls.http_method_names:
-                raise TypeError(u"You tried to pass in the %s method name as a "
-                                u"keyword argument to %s(). Don't do that."
+                raise TypeError("You tried to pass in the %s method name as a "
+                                "keyword argument to %s(). Don't do that."
                                 % (key, cls.__name__))
             if not hasattr(cls, key):
-                raise TypeError(u"%s() received an invalid keyword %r" % (
+                raise TypeError("%s() received an invalid keyword %r" % (
                     cls.__name__, key))
 
         def view(request, *args, **kwargs):
@@ -88,6 +90,9 @@ class View(object):
         return http.HttpResponseNotAllowed(self._allowed_methods())
 
     def options(self, request, *args, **kwargs):
+        """
+        Handles responding to requests for the OPTIONS HTTP verb.
+        """
         response = http.HttpResponse()
         response['Allow'] = ', '.join(self._allowed_methods())
         response['Content-Length'] = 0
@@ -106,7 +111,11 @@ class TemplateResponseMixin(object):
 
     def render_to_response(self, context, **response_kwargs):
         """
-        Returns a response with a template rendered with the given context.
+        Returns a response, using the `response_class` for this
+        view, with a template rendered with the given context.
+
+        If any keyword arguments are provided, they will be
+        passed to the constructor of the response class.
         """
         return self.response_class(
             request = self.request,

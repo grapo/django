@@ -1,3 +1,5 @@
+from __future__ import unicode_literals
+
 from django.conf import settings
 from django.contrib.sites.models import get_current_site
 from django.core.exceptions import ImproperlyConfigured, ObjectDoesNotExist
@@ -8,6 +10,7 @@ from django.utils.encoding import force_unicode, iri_to_uri, smart_unicode
 from django.utils.html import escape
 from django.utils.timezone import is_naive
 
+
 def add_domain(domain, url, secure=False):
     protocol = 'https' if secure else 'http'
     if url.startswith('//'):
@@ -16,9 +19,7 @@ def add_domain(domain, url, secure=False):
     elif not (url.startswith('http://')
             or url.startswith('https://')
             or url.startswith('mailto:')):
-        # 'url' must already be ASCII and URL-quoted, so no need for encoding
-        # conversions here.
-        url = iri_to_uri(u'%s://%s%s' % (protocol, domain, url))
+        url = iri_to_uri('%s://%s%s' % (protocol, domain, url))
     return url
 
 class FeedDoesNotExist(ObjectDoesNotExist):
@@ -59,14 +60,14 @@ class Feed(object):
         except AttributeError:
             return default
         if callable(attr):
-            # Check func_code.co_argcount rather than try/excepting the
+            # Check __code__.co_argcount rather than try/excepting the
             # function and catching the TypeError, because something inside
             # the function may raise the TypeError. This technique is more
             # accurate.
-            if hasattr(attr, 'func_code'):
-                argcount = attr.func_code.co_argcount
+            if hasattr(attr, '__code__'):
+                argcount = attr.__code__.co_argcount
             else:
-                argcount = attr.__call__.func_code.co_argcount
+                argcount = attr.__call__.__code__.co_argcount
             if argcount == 2: # one argument is 'self'
                 return attr(obj)
             else:
