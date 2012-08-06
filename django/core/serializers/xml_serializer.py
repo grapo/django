@@ -165,7 +165,9 @@ class NativeFormat(base.NativeFormat):
         else:
             xml.characters(data._object)
 
-    def deserialize_stream(self, stream):
+    def deserialize_stream(self, stream_or_string):
+        if isinstance(stream_or_string, basestring):
+            stream = StringIO.StringIO(stream_or_string)
         event_stream = iterparse(stream, events=['start', 'end'])
         while True:
             event, node = event_stream.next() # will raise StopIteration exception.
