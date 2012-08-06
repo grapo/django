@@ -69,10 +69,6 @@ class M2mWithAttributes(field.M2mField):
 
 
 class FieldsSerializer(native.ModelSerializer):
-    def metadata(self, metadict):
-        metadict['as_list'] = True
-        return metadict
-
     class Meta:
        field_serializer = ModelWithAttributes
        related_serializer = RelatedWithAttributes
@@ -169,8 +165,8 @@ class NativeFormat(base.NativeFormat):
         else:
             xml.characters(data._object)
 
-    def deserialize(self, obj, **options):
-        event_stream = iterparse(StringIO.StringIO(obj), events=['start', 'end'])
+    def deserialize_stream(self, stream):
+        event_stream = iterparse(stream, events=['start', 'end'])
         while True:
             event, node = event_stream.next() # will raise StopIteration exception.
             if node.tag == 'django-objects':

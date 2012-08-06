@@ -213,7 +213,9 @@ class NativeFormat(object):
             return self.stream.getvalue()
     
     def deserialize(self, stream, **options):
-        return stream
+        self.options = options
+        models.get_apps()
+        return self.deserialize_stream(stream)
 
 
 class DeserializedObject(object):

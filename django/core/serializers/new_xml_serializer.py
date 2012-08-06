@@ -179,8 +179,8 @@ class NativeFormat(base.NativeFormat):
         else:
             self.handle_field(xml, data, level, name)
 
-    def deserialize(self, obj, **options):
-        event_stream = iterparse(StringIO.StringIO(obj), events=['start', 'end'])
+    def deserialize_stream(self, stream):
+        event_stream = iterparse(stream, events=['start', 'end'])
         while True:
             event, node = event_stream.next() # will raise StopIteration exception.
             if node.tag == 'django-objects':

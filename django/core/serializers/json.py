@@ -11,6 +11,7 @@ import json
 import inspect
 
 from django.utils.timezone import is_aware
+
 from django.core.serializers import native
 from django.core.serializers import base
 from django.core.serializers import field
@@ -62,8 +63,14 @@ class NativeFormat(base.NativeFormat):
         obj = unpack_object(obj)
         json.dump(obj, self.stream, cls=DjangoJSONEncoder, **self.options)
 
-    def deserialize(self, obj, **options):
-        return json.loads(obj, **options)
+    def deserialize_stream(self, stream_or_string):
+        if isinstance(stream_or_string, bytes):
+            stream_or_string = stream_or_string.decode('utf-8')
+        
+        if isinstance(stream_or_string, basestring):
+            return json.loads(stream_or_string)
+        else:
+            return json.load(stream_or_string)
 
 
 class DjangoJSONEncoder(json.JSONEncoder):

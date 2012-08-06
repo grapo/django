@@ -7,6 +7,7 @@ Requires PyYaml (http://pyyaml.org/), but that's checked for in __init__.
 import decimal
 import yaml
 import types
+from io import StringIO
 
 from django.utils.datastructures import SortedDict
 
@@ -52,6 +53,12 @@ class NativeFormat(base.NativeFormat):
     def serialize_objects(self, obj):
         yaml.dump(obj, self.stream, Dumper=DjangoSafeDumper, **self.options)
 
-    def deserialize(self, obj, **options):
-        return yaml.safe_load(obj)
+    def deserialize_stream(self, stream_or_string):
+        if isinstance(stream_or_string, bytes):
+            stream_or_string = stream_or_string.decode('utf-8')
+        if isinstance(stream_or_string, basestring):
+            stream = StringIO(stream_or_string)
+        else:
+            stream = stream_or_string
+        return yaml.safe_load(stream)
 
