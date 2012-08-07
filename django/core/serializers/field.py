@@ -121,43 +121,118 @@ class ModelField(Field):
         setattr(instance.object, field_name, obj)
 
 
-class M2mField(ModelField):
+class RelatedField(ModelField):
+    def __init__(self, label=None, use_natural_keys=False):
+        super(RelatedField, self).__init__(label=label)
+        self.use_natural_keys = use_natural_keys
+
+    def get_object(self, obj, field_name):
+        field = obj._meta.get_field(field_name)
+        if self.use_natural_keys and hasattr(field.rel.to, 'natural_key'):
+            related = getattr(obj, field.name)
+            if related:
+                value = related.natural_key()
+            else:
+                value = None
+        else:
+            value = getattr(obj, field.get_attname())
+        
+        return value
+
+    def set_object(self, obj, instance, field_name):
+        field = instance.object._meta.get_field(field_name)
+        setattr(instance.object, field.attname, obj)
+    
+    def serialize_itarable(self, obj):
+        return obj
+        
+    def deserialize_iterable(self, obj, field): # list of natural keys
+        return self.deserialize_object(obj, field)
+    
+    def deserialize_object(self, obj, field):
+        db = "default" # TODO Multiple db
+        if isinstance(obj, str):
+            obj = smart_unicode(obj) # TODO add access to options
+
+        if hasattr(field.rel.to._default_manager, 'get_by_natural_key'):
+            if hasattr(obj, '__iter__'):
+                obj = field.rel.to._default_manager.db_manager(db).get_by_natural_key(*obj)
+                value = getattr(obj, field.rel.field_name)
+                # If this is a natural foreign key to an object that
+                # has a FK/O2O as the foreign key, use the FK value
+                if field.rel.to._meta.pk.rel:
+                    value = value.pk
+            else:
+                value = field.rel.to._meta.get_field(field.rel.field_name).to_python(obj)
+        else:
+            value = field.rel.to._meta.get_field(field.rel.field_name).to_python(obj)
+        return value
+
+    def get_metadata(self):
+        metadict = super(RelatedField, self).get_metadata()
+        metadict['item-name'] = 'natural'
+        return metadict
+
+
+class M2mRelatedField(RelatedField):
+    def serialize_object(self, obj): # get_object from RelatedField won't be called
+        if self.use_natural_keys and hasattr(obj, 'natural_key'):
+            return obj.natural_key()
+        return obj._get_pk_val()
+
+    def deserialize_iterable(self, obj, field): # list of natural keys
+        return self.deserialize_object(obj, field)
+
+    def deserialize_object(self, obj, field):
+        db = "default" # TODO Multiple db
+        if isinstance(obj, str):
+            obj = smart_unicode(obj) # TODO add access to options
+
+        if hasattr(field.rel.to._default_manager, 'get_by_natural_key'):
+            if hasattr(obj, '__iter__'):
+                return field.rel.to._default_manager.db_manager(db).get_by_natural_key(*obj).pk
+            else:
+                return smart_unicode(field.rel.to._meta.pk.to_python(obj))
+        else:
+            return smart_unicode(field.rel.to._meta.pk.to_python(obj))
+
+    def get_metadata(self):
+        metadict = super(M2mRelatedField, self).get_metadata()
+        metadict['item-name'] = 'natural'
+        return metadict
+
+class M2mField(RelatedField):
+    def __init__(self, label=None, use_natural_keys=False, related_field=M2mRelatedField):
+        super(M2mField, self).__init__(label=label, use_natural_keys=use_natural_keys)
+        self.related_field = related_field
+
     def get_object(self, obj, field_name):
         field, _, _, m2m = obj._meta.get_field_by_name(field_name)
         if m2m and field.rel.through._meta.auto_created:
             return getattr(obj, field_name).iterator()
-        return field._get_val_from_obj(obj)
-    
+        raise base.SerializationError(self.__class__ + " is only for auto created ManyToMany fields serialization")
+
     def serialize_iterable(self, obj):
-        rf = RelatedField()
-        for o in obj:
-            yield rf.serialize(o._get_pk_val()) 
-
-
-class RelatedField(ModelField):
-    def get_object(self, obj, field_name):
-        field, _, _, m2m = obj._meta.get_field_by_name(field_name)
-        if m2m and field.rel.through._meta.auto_created:
-            return (o._get_pk_val() for o in getattr(obj, field_name).iterator())
-        return field._get_val_from_obj(obj)
-
-    def set_object(self, obj, instance, field_name):
-        field, _, _, m2m = instance.object._meta.get_field_by_name(field_name)
-        if m2m:
-            instance.m2m_data[field_name] = obj
+        if issubclass(self.related_field, RelatedField):
+            rf = self.related_field(use_natural_keys=self.use_natural_keys)
         else:
-            setattr(instance.object, field.attname, obj)
+            rf = self.related_field()
+        
+        for o in obj:
+            yield rf.serialize(o) 
+
+    def deserialize_iterable(self, obj, field):
+        rf = self.related_field()
+        for o in obj:
+            yield rf.deserialize(o, field)
     
-    def serialize_itarable(self, obj):
-        for o in obj:
-            yield self.serialize(o)
+    def set_object(self, obj, instance, field_name):
+        instance.m2m_data[field_name] = obj
 
-    def serialize_object(self, obj):
-        if is_protected_type(obj):
-            return obj
-        else:
-            return smart_unicode(obj)
-
+    def get_metadata(self):
+        metadict = super(RelatedField, self).get_metadata()
+        metadict['item-name'] = 'object'
+        return metadict
 
 class PrimaryKeyField(ModelField):
     def get_object(self, obj, field_name):

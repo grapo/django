@@ -200,6 +200,7 @@ class NativeFormat(object):
     def serialize(self, objects, **options):
         self.stream = options.pop("stream", BytesIO())
         options.pop('fields', None)
+        options.pop('use_natural_keys', None)
         self.options = options
         self.serialize_objects(objects)
         return self.getvalue()

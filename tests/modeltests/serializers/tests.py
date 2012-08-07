@@ -201,6 +201,13 @@ class SerializersTestBase(object):
                                            Article.objects.all())
         models = list(serializers.deserialize(self.serializer_name, serial_str))
         self.assertEqual(len(models), 2)
+    
+    def test_serializer_natural_keys(self):
+        """Tests that natural keys are supported well."""
+        serial_str = serializers.serialize(self.serializer_name,
+                                           Article.objects.all(), use_natural_keys=True)
+        models = list(serializers.deserialize(self.serializer_name, serial_str))
+        self.assertEqual(len(models), 2)
 
     def test_altering_serialized_output(self):
         """

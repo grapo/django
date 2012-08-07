@@ -18,10 +18,6 @@ class TypeField(field.Field):
         return field.get_internal_type()
 
 
-class UnicodeField(field.Field):
-    def serialize_object(self, obj):
-        return smart_unicode(obj)
-
 class ModelWithAttributes(field.ModelField):
     type = TypeField()
 
@@ -57,18 +53,27 @@ class RelatedWithAttributes(field.RelatedField):
     def serialize_object(self, obj):
         return smart_unicode(obj)
 
+
+class XmlM2mRelatedField(field.M2mRelatedField):
+    def serialize_object(self, obj): # get_object from RelatedField won't be called
+        serialized = super(XmlM2mRelatedField, self).serialize_object(obj)
+        if hasattr(serialized, '__iter__'):
+            return [smart_unicode(o) for o in serialized]
+        else:
+            return smart_unicode(serialized)
+
+
 class M2mWithAttributes(field.M2mField):
     rel = RelField()
     to = ToField()
 
+    def __init__(self, label=None, use_natural_keys=False, related_field=XmlM2mRelatedField):
+        super(M2mWithAttributes, self).__init__(label=label, use_natural_keys=use_natural_keys)
+        self.related_field = related_field
+    
     def metadata(self, metadict):
         metadict['attributes'] = ['rel', 'to']
         return metadict
-
-    def serialize_iterable(self, obj):
-        serializer = UnicodeField()
-        for o in obj:
-            yield serializer.serialize(o._get_pk_val()) 
 
 
 class FieldsSerializer(native.ModelSerializer):
@@ -137,7 +142,7 @@ class NativeFormat(base.NativeFormat):
     def handle_field(self, xml, data, level, name=None):
         if name is not None:
             attributes = {}
-            for attr_name  in data.metadata.get('attributes', []):
+            for attr_name  in getattr(data, 'metadata', {}).get('attributes', []):
                 if attr_name in data.fields:
                     attrib = data.fields[attr_name]
                     if attrib is not None:
@@ -145,7 +150,7 @@ class NativeFormat(base.NativeFormat):
                 
             self.indent(xml, level)
             xml.startElement(name, attributes)
-        xml.characters(data._object)
+        xml.characters(getattr(data, '_object', data))
         if name is not None:
             xml.endElement(name)
 

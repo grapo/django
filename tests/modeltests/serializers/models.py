@@ -13,7 +13,12 @@ from django.db import models
 from django.utils import six
 
 
+class CategoryManager(models.Manager):
+    def get_by_natural_key(self, name):
+        return self.get(name=name)
+
 class Category(models.Model):
+    objects = CategoryManager()
     name = models.CharField(max_length=20)
 
     class Meta:
@@ -22,8 +27,16 @@ class Category(models.Model):
     def __unicode__(self):
         return self.name
 
+    def natural_key(self):
+        return (self.name,)
+
+
+class AuthorManager(models.Manager):
+    def get_by_natural_key(self, name):
+        return self.get(name=name)
 
 class Author(models.Model):
+    objects = AuthorManager()
     name = models.CharField(max_length=20)
 
     class Meta:
@@ -31,6 +44,9 @@ class Author(models.Model):
 
     def __unicode__(self):
         return self.name
+
+    def natural_key(self):
+        return (self.name,)
 
 
 class Article(models.Model):

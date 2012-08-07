@@ -98,6 +98,7 @@ class ModelSerializerOptions(object):
         self.m2m_serializer = getattr(options, 'm2m_serializer', field.M2mField)
         self.field_serializer = getattr(options, 'field_serializer', field.ModelField)
         self.related_reserialize = getattr(options, 'related_reserialize', None)
+        self.use_natural_keys = getattr(options, 'use_natural_keys', False)
         self.class_name = getattr(options, 'class_name', None)
 
 
@@ -112,9 +113,9 @@ class BaseModelSerializer(BaseObjectSerializer):
     def get_object_field_serializer(self, obj, field_name):
         field, model, direct, m2m = obj._meta.get_field_by_name(field_name)
         if m2m:
-            return self.opts.m2m_serializer()
+            return self.opts.m2m_serializer(use_natural_keys=self.opts.use_natural_keys)
         elif field.rel:
-            return self.opts.related_serializer()
+            return self.opts.related_serializer(use_natural_keys=self.opts.use_natural_keys)
         else:
             return self.opts.field_serializer()
     
