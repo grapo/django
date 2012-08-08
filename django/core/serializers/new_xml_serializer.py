@@ -207,7 +207,11 @@ class NativeFormat(base.NativeFormat):
             else:
                 value, node = self._to_python(node, event_stream)
                 if data is None:
-                    data = {}
+                    if 'rel' in start_node.attrib:
+                        # start_node is related field so every node inside is natural key
+                        data = []
+                    else:
+                        data = {}
                 if isinstance(data, dict):
                     if node.tag in data:
                         data = [data[node.tag], value]

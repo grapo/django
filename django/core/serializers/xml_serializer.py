@@ -13,15 +13,18 @@ from django.core.serializers import base
 from django.core.serializers import field
 from django.core.serializers.utils import ObjectWithMetadata
 
+
 class TypeField(field.Field):
     def get_object(self, obj, field_name):
         field, _, _, _ = obj._meta.get_field_by_name(field_name)
         return field.get_internal_type()
 
+
 class NameField(field.Field):
     def get_object(self, obj, field_name):
         field, _, _, _ = obj._meta.get_field_by_name(field_name)
         return field.name
+
 
 class ModelWithAttributes(field.ModelField):
     type = TypeField()
@@ -46,6 +49,7 @@ class ToField(field.Field):
         field, _, _, _ = obj._meta.get_field_by_name(field_name)
         return smart_unicode(field.rel.to._meta)
 
+
 class RelatedWithAttributes(field.RelatedField):
     name = NameField() 
     rel = RelField()
@@ -57,6 +61,7 @@ class RelatedWithAttributes(field.RelatedField):
 
     def serialize_object(self, obj):
         return smart_unicode(obj)
+
 
 class M2mWithAttributes(field.M2mField):
     name = NameField() 
@@ -142,19 +147,36 @@ class NativeFormat(base.NativeFormat):
         xml.startElement(name, attributes)
         
         if hasattr(data, '__iter__'):
-            for item in data:
-                self.handle_m2m_field(xml, item, level + 1)
-
+            if 'rel' in attributes and attributes['rel']._object == "ManyToManyRel":
+                for item in data:
+                    self.handle_m2m_field(xml, item, level + 1)
+            else: #natural keys
+                self.handle_natural_keys(xml, data, level + 1)
             self.indent(xml, level)
         else:
             xml.characters(data._object)
         xml.endElement(name)
 
+    def handle_natural_keys(self, xml, data, level):
+        for o in data:
+            self.indent(xml, level)
+            xml.startElement("natural", {})
+            xml.characters(getattr(o, '_object', o))
+            xml.endElement("natural")
+
     def handle_m2m_field(self, xml, data, level, name="object"):
-        attributes = {'pk' : smart_unicode(data._object)}
-        self.indent(xml, level)
-        xml.startElement(name, attributes)
-        xml.endElement(name)
+        if hasattr(data, '__iter__'): # natural keys
+            self.indent(xml, level)
+            xml.startElement(name, {})
+            self.handle_natural_keys(xml, data, level + 1) 
+            self.indent(xml, level)
+            xml.endElement(name)
+
+        else:
+            attributes = {'pk' : smart_unicode(data._object)}
+            self.indent(xml, level)
+            xml.startElement(name, attributes)
+            xml.endElement(name)
    
     def _to_xml(self, xml, data, level): 
         if isinstance(data, dict):
@@ -195,15 +217,39 @@ class NativeFormat(base.NativeFormat):
             name = node.attrib['name']
             data = node.text
             return name, data, node
-        else: # must be m2m and object starts
+        else: 
+            #  m2m o natural key
             name = start_node.attrib['name']
-            m2m_pk = []
-            while node.tag != 'field':
-                data = self.de_handle_m2m_field(node, event_stream)
-                m2m_pk.append(data)
-                event, node = event_stream.next()
-            return name, m2m_pk, node
+            if 'rel' in start_node.attrib and start_node.attrib['rel'] == "ManyToManyRel":
+                # m2m
+                m2m_pk = []
+                while node.tag != 'field':
+                    data = self.de_handle_m2m_field(node, event_stream)
+                    m2m_pk.append(data)
+                    event, node = event_stream.next()
+                return name, m2m_pk, node
+            else: # natural key
+                natural_keys, node  = self.de_handle_natural_keys(node, event_stream)
+                return name, natural_keys, node
 
+    def de_handle_natural_keys(self, start_node, event_stream):
+        keys = []
+        node = start_node
+        while node.tag not in ['field', 'object']:
+            data = self._de_handle_natural_keys(node, event_stream)
+            keys.append(data)
+            event, node = event_stream.next()
+        return keys, node
+
+    def _de_handle_natural_keys(self, node, event_stream):
+        event, node = event_stream.next()
+        return node.text
+
+    
     def de_handle_m2m_field(self, start_node, event_stream):
         event, node = event_stream.next()
-        return node.attrib['pk']
+        if node != start_node: # natural key
+            natural_keys, node  = self.de_handle_natural_keys(node, event_stream)
+            return natural_keys
+        else:
+            return node.attrib['pk']
