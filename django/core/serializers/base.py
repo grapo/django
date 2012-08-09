@@ -231,15 +231,24 @@ class DeserializedObject(object):
     (and not touch the many-to-many stuff.)
     """
 
-    def __init__(self, obj, m2m_data=None):
+    def __init__(self, obj=None, m2m_data=None, ModelClass=None):
         self.object = obj
+        self.ModelClass = ModelClass
+        self.instance_dict = {}
         if m2m_data == None:
             m2m_data = {} # possible backward incompatibility
         self.m2m_data = m2m_data
-
+    
+    def make_instance(self):
+        self.object = self.ModelClass(**self.instance_dict)
+    
     def __repr__(self):
-        return "<DeserializedObject: %s.%s(pk=%s)>" % (
-            self.object._meta.app_label, self.object._meta.object_name, self.object.pk)
+        if self.object is not None:
+            return "<DeserializedObject: %s.%s(pk=%s)>" % (
+                self.object._meta.app_label, self.object._meta.object_name, self.object.pk)
+        else:
+            return "<DeserializedObject: %s.%s>" % (
+                self.ModelClass._meta.app_label, self.ModelClass._meta.object_name)
 
     def save(self, save_m2m=True, using=None):
         # Call save on the Model baseclass directly. This bypasses any

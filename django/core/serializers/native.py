@@ -133,28 +133,33 @@ class BaseModelSerializer(BaseObjectSerializer):
         return names
     
     def get_deserializable_fields_for_object(self, obj):
-        return self.get_fields_for_object(obj.object)
+        return self.get_fields_for_object(obj.ModelClass)
 
     def _deserialize(self, serialized_obj, instance, field_name):
         # instance is of DeserializedObject type
         if not self.follow_object:
             return self.deserialize(serialized_obj, instance)
         else:
-            setattr(instance.object, field_name, self.deserialize(serialized_obj))
+            instance.instance_dict[field_name] =  self.deserialize(serialized_obj)
             return instance
+
+    def deserialize_object(self, serialized_obj, instance):
+        instance = super(BaseModelSerializer, self).deserialize_object(serialized_obj, instance)
+        instance.make_instance()
+        return instance
 
     def _get_instance(self, obj, instance=None):
         if instance is None:
-            return base.DeserializedObject(self.create_instance(obj))
+            return base.DeserializedObject(ModelClass=self.create_instance(obj))
         else:
             return instance
     
     def create_instance(self, serialized_obj):
         if self.opts.class_name is not None:
             if isinstance(self.opts.class_name, str):
-                return _get_model(serialized_obj[self.opts.class_name])()
+                return _get_model(serialized_obj[self.opts.class_name])
             else:
-                return self.opts.class_name()
+                return self.opts.class_name
         raise base.DeserializationError(u"Can't resolve class for object creation")
 
 

@@ -98,7 +98,7 @@ class ModelField(Field):
             return field.value_to_string(obj)
 
     def _deserialize(self, serialized_obj, instance, field_name):
-        field = instance.object._meta.get_field(field_name)
+        field = instance.ModelClass._meta.get_field(field_name)
         self.set_object(self.deserialize(serialized_obj, field), instance, field_name)
         return instance
     
@@ -118,7 +118,7 @@ class ModelField(Field):
         return field.to_python(obj) 
 
     def set_object(self, obj, instance, field_name):
-        setattr(instance.object, field_name, obj)
+        instance.instance_dict[field_name] = obj
 
 
 class RelatedField(ModelField):
@@ -140,8 +140,8 @@ class RelatedField(ModelField):
         return value
 
     def set_object(self, obj, instance, field_name):
-        field = instance.object._meta.get_field(field_name)
-        setattr(instance.object, field.attname, obj)
+        field = instance.ModelClass._meta.get_field(field_name)
+        instance.instance_dict[field.attname] = obj
     
     def serialize_itarable(self, obj):
         return obj
@@ -239,7 +239,7 @@ class PrimaryKeyField(ModelField):
         return obj._get_pk_val()
 
     def _deserialize(self, serialized_obj, instance, field_name):
-        field = instance.object._meta.pk
+        field = instance.ModelClass._meta.pk
         self.set_object(self.deserialize(serialized_obj, field), instance, field.attname)
         return instance
 
