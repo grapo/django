@@ -6,11 +6,11 @@ from xml.etree.ElementTree import iterparse
 
 from django.conf import settings
 from django.utils.xmlutils import SimplerXMLGenerator
-#from xml.dom import pulldom
 from django.utils.encoding import smart_unicode
 from django.core.serializers import  native
 from django.core.serializers import base
 from django.core.serializers import field
+
 
 class TypeField(field.Field):
     def get_object(self, obj, field_name):
@@ -27,7 +27,10 @@ class ModelWithAttributes(field.ModelField):
 
     def get_object(self, obj, field_name):
         field = obj._meta.get_field_by_name(field_name)[0]
-        return field.value_to_string(obj)
+        if getattr(obj, field_name) is not None:
+            return field.value_to_string(obj)
+        else:
+            return None
 
 
 class RelField(field.Field):
@@ -51,7 +54,10 @@ class RelatedWithAttributes(field.RelatedField):
         return metadict
 
     def serialize_object(self, obj):
-        return smart_unicode(obj)
+        if obj is not None:
+            return smart_unicode(obj)
+        else:
+            return obj
 
 
 class XmlM2mRelatedField(field.M2mRelatedField):
@@ -150,7 +156,11 @@ class NativeFormat(base.NativeFormat):
                 
             self.indent(xml, level)
             xml.startElement(name, attributes)
-        xml.characters(getattr(data, '_object', data))
+        val = getattr(data, '_object', data)
+        if val is not None:
+            xml.characters(val)
+        else:
+            xml.addQuickElement("None")
         if name is not None:
             xml.endElement(name)
 
@@ -187,6 +197,8 @@ class NativeFormat(base.NativeFormat):
     def deserialize_stream(self, stream_or_string):
         if isinstance(stream_or_string, basestring):
             stream = StringIO.StringIO(stream_or_string)
+        else:
+            stream = stream_or_string
         event_stream = iterparse(stream, events=['start', 'end'])
         while True:
             event, node = event_stream.next() # will raise StopIteration exception.
@@ -194,24 +206,60 @@ class NativeFormat(base.NativeFormat):
                 continue
             data, node = self._to_python(node, event_stream)
             yield data    
+   
+
+    def de_handle_m2m_field(self, start_node, event_stream):
+        data = []
+        event, node = event_stream.next()
+        while node != start_node:
+            value, node = self._to_python(node, event_stream)
+            data.append(value)
+            event, node = event_stream.next()
+        
+        return data, node
+    
+    def de_handle_fk_field(self, start_node, event_stream):
+        event, node = event_stream.next()
+        data = None
+        if event == "end": # end of start_node
+            assert node == start_node
+            data = node.text or ""
+        elif node.tag == "None":
+            event_stream.next() # end None tag
+            event, node = event_stream.next() # end start_node
+            assert node == start_node
+            data = None
+        else: 
+            data = []
+            while node != start_node:
+                value, node = self._to_python(node, event_stream)
+                data.append(value)
+                event, node = event_stream.next()
+        return data, node
+
+
 
     def _to_python(self, start_node, event_stream):
-        data = None
-        while True:
-            event, node = event_stream.next()
-            if event == "end": # end of start_node
-                assert node == start_node
-                if data is None:
-                    data = node.text
-                break
+        if 'rel' in start_node.attrib:
+            if start_node.attrib['rel'] == "ManyToManyRel":
+                return self.de_handle_m2m_field(start_node, event_stream)
             else:
+                return self.de_handle_fk_field(start_node, event_stream)
+
+        event, node = event_stream.next()
+        data = None
+        if event == "end": # end of start_node
+            assert node == start_node
+            data = node.text or ""
+        elif node.tag == "None":
+            event_stream.next() # end None tag
+            event, node = event_stream.next() # end start_node
+            assert node == start_node
+            data = None
+        else:
+            data = {}
+            while node != start_node:
                 value, node = self._to_python(node, event_stream)
-                if data is None:
-                    if 'rel' in start_node.attrib:
-                        # start_node is related field so every node inside is natural key
-                        data = []
-                    else:
-                        data = {}
                 if isinstance(data, dict):
                     if node.tag in data:
                         data = [data[node.tag], value]
@@ -219,6 +267,8 @@ class NativeFormat(base.NativeFormat):
                         data[node.tag] = value
                 elif hasattr(data, '__iter__'):
                     data.append(value)
-        if isinstance(data, dict) and node.attrib:
-            data.update(node.attrib)
+                    
+                event, node = event_stream.next()
+            if isinstance(data, dict) and node.attrib:
+                data.update(node.attrib)
         return data, node
