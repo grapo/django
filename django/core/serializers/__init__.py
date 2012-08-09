@@ -137,7 +137,7 @@ def deserialize(format, stream_or_string, deserializer=None, **options):
         d = deserializer(**options)
     format_deserializer = get_format_serializer(format)()
     native_objs = format_deserializer.deserialize(stream_or_string, **options)
-    return d.deserialize(native_objs, **options)
+    return d.deserialize(native_objs)
 
 
 def _load_serializers():

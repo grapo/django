@@ -210,7 +210,7 @@ class M2mField(RelatedField):
         field, _, _, m2m = obj._meta.get_field_by_name(field_name)
         if m2m and field.rel.through._meta.auto_created:
             return getattr(obj, field_name).iterator()
-        raise base.SerializationError(self.__class__ + " is only for auto created ManyToMany fields serialization")
+        raise base.SerializationError(self.__class__.__name__ + " is only for auto created ManyToMany fields serialization")
 
     def serialize_iterable(self, obj):
         if issubclass(self.related_field, RelatedField):

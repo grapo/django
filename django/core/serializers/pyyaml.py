@@ -8,6 +8,7 @@ import decimal
 import yaml
 import types
 from io import StringIO
+import datetime
 
 from django.utils.datastructures import SortedDict
 from django.utils import six
@@ -21,13 +22,20 @@ from django.core.serializers.utils import ObjectWithMetadata
 class DjangoSafeDumper(yaml.SafeDumper):
     def represent_decimal(self, data):
         return self.represent_scalar('tag:yaml.org,2002:str', str(data))
+
+    def represent_time(self, data):
+        return self.represent_data(str(data))
+
     def represent_object_with_metadata(self, data):
         return self.represent_data(data.get_object())
 
+
+DjangoSafeDumper.add_representer(datetime.time, DjangoSafeDumper.represent_time)
 DjangoSafeDumper.add_representer(decimal.Decimal, DjangoSafeDumper.represent_decimal)
 DjangoSafeDumper.add_representer(ObjectWithMetadata, DjangoSafeDumper.represent_object_with_metadata)
 DjangoSafeDumper.add_representer(types.GeneratorType, yaml.representer.SafeRepresenter.represent_list)
 DjangoSafeDumper.add_representer(SortedDict, yaml.representer.SafeRepresenter.represent_dict)
+
 
 class FieldsSerializer(native.ModelSerializer):
     pass
@@ -40,16 +48,15 @@ class Serializer(native.ModelSerializer):
     model = field.ModelNameField() 
     fields = FieldsSerializer(follow_object=False)
 
-
     def __init__(self, label=None, follow_object=True, **kwargs):
         super(Serializer, self).__init__(label, follow_object)
         # should this be rewrited?
         self.base_fields['fields'].opts = native.make_options(self.base_fields['fields']._meta, **kwargs)
         
-
     class Meta:
         fields = ()
         class_name = "model"
+
 
 class NativeFormat(base.NativeFormat):
     def serialize_objects(self, obj):
@@ -62,4 +69,7 @@ class NativeFormat(base.NativeFormat):
             stream = StringIO(stream_or_string)
         else:
             stream = stream_or_string
-        return yaml.safe_load(stream)
+        try:
+            return yaml.safe_load(stream)
+        except Exception, e:
+            raise base.DeserializationError(e)

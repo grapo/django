@@ -137,7 +137,7 @@ class BaseSerializer(object):
         """
         fields = self.get_fields_for_object(obj)
 
-        native = SortedDict()
+        native = {}
         for field_name, serializer in fields.iteritems():
             nativ_obj = serializer._serialize(obj, field_name)
             if serializer.label:

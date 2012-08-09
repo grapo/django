@@ -65,7 +65,10 @@ class BaseObjectSerializer(base.Serializer):
                 continue
             if f_name in declared_fields_names:
                 continue
-            fields[f_name] = self.get_object_field_serializer(obj, f_name)
+            serializer = self.get_object_field_serializer(obj, f_name)
+            if serializer is not None:
+                fields[f_name] = serializer
+
         declared_fields_copy = declared_fields.copy()
         declared_fields_copy.update(fields)
         if self.opts.fields: # ordering must be like in self.opts.fields
@@ -113,7 +116,10 @@ class BaseModelSerializer(BaseObjectSerializer):
     def get_object_field_serializer(self, obj, field_name):
         field, model, direct, m2m = obj._meta.get_field_by_name(field_name)
         if m2m:
-            return self.opts.m2m_serializer(use_natural_keys=self.opts.use_natural_keys)
+            if field.rel.through._meta.auto_created:
+                return self.opts.m2m_serializer(use_natural_keys=self.opts.use_natural_keys)
+            else:
+                return None
         elif field.rel:
             return self.opts.related_serializer(use_natural_keys=self.opts.use_natural_keys)
         else:

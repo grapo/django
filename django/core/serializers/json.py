@@ -43,7 +43,7 @@ class Serializer(native.ModelSerializer):
 
 def unpack_object(obj):
     if hasattr(obj, 'get_object'):
-        obj = obj._object
+        obj = obj.get_object()
     else:
         return obj
     if isinstance(obj, dict):
@@ -67,12 +67,13 @@ class NativeFormat(base.NativeFormat):
     def deserialize_stream(self, stream_or_string):
         if isinstance(stream_or_string, bytes):
             stream_or_string = stream_or_string.decode('utf-8')
-        
-        if isinstance(stream_or_string, six.string_types):
-            return json.loads(stream_or_string)
-        else:
-            return json.load(stream_or_string)
-
+        try: 
+            if isinstance(stream_or_string, six.string_types):
+                return json.loads(stream_or_string)
+            else:
+                return json.load(stream_or_string)
+        except Exception, e:
+            raise base.DeserializationError(e)
 
 class DjangoJSONEncoder(json.JSONEncoder):
     """
