@@ -4,6 +4,7 @@ Module for field serializer/unserializer classes.
 
 import collections
 
+from django.conf import settings
 from django.db import DEFAULT_DB_ALIAS
 from django.utils.datastructures import SortedDict
 from django.utils.encoding import is_protected_type, smart_unicode
@@ -119,7 +120,7 @@ class ModelField(Field):
 
     def deserialize_object(self, obj, field):
         if isinstance(obj, str):
-            obj = smart_unicode(obj) # TODO add access to options
+            obj = smart_unicode(obj, self.context.get("encoding", settings.DEFAULT_CHARSET), strings_only=True)
         return field.to_python(obj) 
 
     def set_object(self, obj, instance, field_name):
@@ -152,7 +153,7 @@ class RelatedField(ModelField):
     
     def deserialize_object(self, obj, field):
         if isinstance(obj, str):
-            obj = smart_unicode(obj) # TODO add access to options
+            obj = smart_unicode(obj, self.context.get("encoding", settings.DEFAULT_CHARSET), strings_only=True)
         if hasattr(field.rel.to._default_manager, 'get_by_natural_key'):
             if hasattr(obj, '__iter__'):
                 obj = field.rel.to._default_manager.db_manager(self.context.get('using', DEFAULT_DB_ALIAS)).get_by_natural_key(*obj)
@@ -184,7 +185,7 @@ class M2mRelatedField(RelatedField):
 
     def deserialize_object(self, obj, field):
         if isinstance(obj, str):
-            obj = smart_unicode(obj) # TODO add access to options
+            obj = smart_unicode(obj, self.context.get("encoding", settings.DEFAULT_CHARSET), strings_only=True)
 
         if hasattr(field.rel.to._default_manager, 'get_by_natural_key'):
             if hasattr(obj, '__iter__'):

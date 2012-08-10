@@ -113,7 +113,6 @@ def serialize(format, queryset, serializer=None, **options):
     Serialize a queryset (or any iterator that returns database objects) using
     a certain serializer.
     """
-    # TODO What to do with **options. Should not pass them everywhere
     if serializer is None:
         s = get_serializer(format)(**options)
     else:
