@@ -1,6 +1,7 @@
 """
 Module for abstract serializer/unserializer base classes.
 """
+import inspect
 from django.db import models
 from django.utils.datastructures import SortedDict
 import copy
@@ -15,6 +16,9 @@ def make_options(meta, **kwargs):
         attr = kwargs.get(name)
         if attr:
             setattr(options, name, attr)
+        value = getattr(options, name)
+        if inspect.isclass(value) and issubclass(value, base.Serializer):
+            setattr(options, name, value())
     return options
 
 
@@ -40,13 +44,18 @@ class BaseObjectSerializer(base.Serializer):
     Base class for serializing Python objects.
     """
     def __init__(self, label=None, follow_object=True, **kwargs):
-        super(BaseObjectSerializer, self).__init__(label, follow_object)
+        opts = {}
+        for option in ['fields', 'exclude']:
+            if option in kwargs:
+                opts[option] = kwargs.pop(option)
+            
+        super(BaseObjectSerializer, self).__init__(label, follow_object, **kwargs)
         
         # possibility to override options when class is instantiated
-        self.opts = make_options(self._meta, **kwargs)
+        self.opts = make_options(self._meta, **opts)
 
     def get_object_field_serializer(self, obj, field_name):
-        return self.opts.field_serializer()
+        return self.opts.field_serializer
 
     def get_object_fields_names(self, obj):
         return obj.__dict__.keys()
@@ -117,13 +126,13 @@ class BaseModelSerializer(BaseObjectSerializer):
         field, model, direct, m2m = obj._meta.get_field_by_name(field_name)
         if m2m:
             if field.rel.through._meta.auto_created:
-                return self.opts.m2m_serializer(use_natural_keys=self.opts.use_natural_keys)
+                return self.opts.m2m_serializer
             else:
                 return None
         elif field.rel:
-            return self.opts.related_serializer(use_natural_keys=self.opts.use_natural_keys)
+            return self.opts.related_serializer
         else:
-            return self.opts.field_serializer()
+            return self.opts.field_serializer
     
     def get_object_fields_names(self, obj):
         concrete_model = obj._meta.concrete_model
@@ -135,7 +144,8 @@ class BaseModelSerializer(BaseObjectSerializer):
     def get_deserializable_fields_for_object(self, obj):
         return self.get_fields_for_object(obj.ModelClass)
 
-    def _deserialize(self, serialized_obj, instance, field_name):
+    def _deserialize(self, serialized_obj, instance, field_name, context):
+        self.update_context(context)
         # instance is of DeserializedObject type
         if not self.follow_object:
             return self.deserialize(serialized_obj, instance)
@@ -145,7 +155,8 @@ class BaseModelSerializer(BaseObjectSerializer):
 
     def deserialize_object(self, serialized_obj, instance):
         instance = super(BaseModelSerializer, self).deserialize_object(serialized_obj, instance)
-        instance.make_instance()
+        if self.follow_object:
+            instance.make_instance()
         return instance
 
     def _get_instance(self, obj, instance=None):

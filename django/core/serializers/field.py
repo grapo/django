@@ -3,10 +3,12 @@ Module for field serializer/unserializer classes.
 """
 
 import collections
-from django.core.serializers import base
+
+from django.db import DEFAULT_DB_ALIAS
 from django.utils.datastructures import SortedDict
 from django.utils.encoding import is_protected_type, smart_unicode
 
+from django.core.serializers import base
 from django.core.serializers.utils import ObjectWithMetadata
 
 
@@ -14,10 +16,11 @@ class Field(base.Serializer):
     """ 
     Class that serialize and deserialize object to python native datatype. 
     """
-    def __init__(self, label=None):
-        super(Field, self).__init__(label=label, follow_object=False)
+    def __init__(self, label=None, **kwargs):
+        super(Field, self).__init__(label=label, follow_object=False, **kwargs)
 
-    def _serialize(self, obj, field_name):
+    def _serialize(self, obj, field_name, context):
+        self.update_context(context)
         self.original_obj = obj
         self.original_field_name = field_name
         new_obj = self.get_object(obj, field_name)
@@ -29,7 +32,7 @@ class Field(base.Serializer):
     def _serialize_fields(self, obj, orig_field_name):
         fields = SortedDict()
         for field_name, serializer in self.base_fields.iteritems():
-            nativ_obj = serializer._serialize(obj, orig_field_name)
+            nativ_obj = serializer._serialize(obj, orig_field_name, self.context)
             if serializer.label:
                 field_name = serializer.label
             fields[field_name] = nativ_obj
@@ -61,7 +64,8 @@ class Field(base.Serializer):
         """
         return obj
 
-    def _deserialize(self, serialized_obj, instance, field_name):
+    def _deserialize(self, serialized_obj, instance, field_name, context):
+        self.update_context(context)
         self.set_object(self.deserialize(serialized_obj), instance, field_name)
         return instance
 
@@ -97,7 +101,8 @@ class ModelField(Field):
         else:
             return field.value_to_string(obj)
 
-    def _deserialize(self, serialized_obj, instance, field_name):
+    def _deserialize(self, serialized_obj, instance, field_name, context):
+        self.update_context(context)
         field = instance.ModelClass._meta.get_field(field_name)
         self.set_object(self.deserialize(serialized_obj, field), instance, field_name)
         return instance
@@ -122,13 +127,9 @@ class ModelField(Field):
 
 
 class RelatedField(ModelField):
-    def __init__(self, label=None, use_natural_keys=False):
-        super(RelatedField, self).__init__(label=label)
-        self.use_natural_keys = use_natural_keys
-
     def get_object(self, obj, field_name):
         field = obj._meta.get_field(field_name)
-        if self.use_natural_keys and hasattr(field.rel.to, 'natural_key'):
+        if self.context.get('use_natural_keys', False) and hasattr(field.rel.to, 'natural_key'):
             related = getattr(obj, field.name)
             if related:
                 value = related.natural_key()
@@ -150,13 +151,11 @@ class RelatedField(ModelField):
         return self.deserialize_object(obj, field)
     
     def deserialize_object(self, obj, field):
-        db = "default" # TODO Multiple db
         if isinstance(obj, str):
             obj = smart_unicode(obj) # TODO add access to options
-
         if hasattr(field.rel.to._default_manager, 'get_by_natural_key'):
             if hasattr(obj, '__iter__'):
-                obj = field.rel.to._default_manager.db_manager(db).get_by_natural_key(*obj)
+                obj = field.rel.to._default_manager.db_manager(self.context.get('using', DEFAULT_DB_ALIAS)).get_by_natural_key(*obj)
                 value = getattr(obj, field.rel.field_name)
                 # If this is a natural foreign key to an object that
                 # has a FK/O2O as the foreign key, use the FK value
@@ -176,7 +175,7 @@ class RelatedField(ModelField):
 
 class M2mRelatedField(RelatedField):
     def serialize_object(self, obj): # get_object from RelatedField won't be called
-        if self.use_natural_keys and hasattr(obj, 'natural_key'):
+        if self.context.get('use_natural_keys', False) and hasattr(obj, 'natural_key'):
             return obj.natural_key()
         return obj._get_pk_val()
 
@@ -184,13 +183,12 @@ class M2mRelatedField(RelatedField):
         return self.deserialize_object(obj, field)
 
     def deserialize_object(self, obj, field):
-        db = "default" # TODO Multiple db
         if isinstance(obj, str):
             obj = smart_unicode(obj) # TODO add access to options
 
         if hasattr(field.rel.to._default_manager, 'get_by_natural_key'):
             if hasattr(obj, '__iter__'):
-                return field.rel.to._default_manager.db_manager(db).get_by_natural_key(*obj).pk
+                return field.rel.to._default_manager.db_manager(self.context.get('using', DEFAULT_DB_ALIAS)).get_by_natural_key(*obj).pk
             else:
                 return smart_unicode(field.rel.to._meta.pk.to_python(obj))
         else:
@@ -202,8 +200,8 @@ class M2mRelatedField(RelatedField):
         return metadict
 
 class M2mField(RelatedField):
-    def __init__(self, label=None, use_natural_keys=False, related_field=M2mRelatedField):
-        super(M2mField, self).__init__(label=label, use_natural_keys=use_natural_keys)
+    def __init__(self, label=None, related_field=M2mRelatedField, **kwargs):
+        super(M2mField, self).__init__(label=label, **kwargs)
         self.related_field = related_field
 
     def get_object(self, obj, field_name):
@@ -213,16 +211,13 @@ class M2mField(RelatedField):
         raise base.SerializationError(self.__class__.__name__ + " is only for auto created ManyToMany fields serialization")
 
     def serialize_iterable(self, obj):
-        if issubclass(self.related_field, RelatedField):
-            rf = self.related_field(use_natural_keys=self.use_natural_keys)
-        else:
-            rf = self.related_field()
+        rf = self.related_field(**self.context)
         
         for o in obj:
             yield rf.serialize(o) 
 
     def deserialize_iterable(self, obj, field):
-        rf = self.related_field()
+        rf = self.related_field(**self.context)
         for o in obj:
             yield rf.deserialize(o, field)
     
@@ -238,7 +233,8 @@ class PrimaryKeyField(ModelField):
     def get_object(self, obj, field_name):
         return obj._get_pk_val()
 
-    def _deserialize(self, serialized_obj, instance, field_name):
+    def _deserialize(self, serialized_obj, instance, field_name, context):
+        self.update_context(context)
         field = instance.ModelClass._meta.pk
         self.set_object(self.deserialize(serialized_obj, field), instance, field.attname)
         return instance

@@ -73,19 +73,23 @@ class SerializerMetaclass(type):
         attrs['base_fields'] = get_declared_fields(bases, attrs)
         new_class = super(SerializerMetaclass,
                      cls).__new__(cls, name, bases, attrs)
-       
+
         return new_class
+
 
 class BaseSerializer(object):
     creation_counter = 0
 
-    def __init__(self, label=None, follow_object=True):
+    def __init__(self, label=None, follow_object=True, **kwargs):
         self.label = label
         self.follow_object = follow_object
-        
+        self.context = kwargs 
         # Increase the creation counter, and save our local copy.
         self.creation_counter = BaseSerializer.creation_counter
         BaseSerializer.creation_counter += 1
+
+    def update_context(self, context):
+        self.context = context
 
     def get_object(self, obj, field_name=None):
         """
@@ -115,7 +119,8 @@ class BaseSerializer(object):
         """
         return metadict
 
-    def _serialize(self, obj, field_name):
+    def _serialize(self, obj, field_name, context):
+        self.update_context(context)
         new_obj = self.get_object(obj, field_name)
         return  self.serialize(new_obj)
 
@@ -139,7 +144,7 @@ class BaseSerializer(object):
 
         native = {}
         for field_name, serializer in fields.iteritems():
-            nativ_obj = serializer._serialize(obj, field_name)
+            nativ_obj = serializer._serialize(obj, field_name, self.context)
             if serializer.label:
                 field_name = serializer.label
             native[field_name] = nativ_obj
@@ -169,10 +174,11 @@ class BaseSerializer(object):
         for subfield_name, serializer in fields.iteritems():
             serialized_name = serializer.label if serializer.label is not None else subfield_name
             if serialized_name in serialized_obj:
-                instance = serializer._deserialize(serialized_obj[serialized_name], instance, subfield_name)
+                instance = serializer._deserialize(serialized_obj[serialized_name], instance, subfield_name, self.context)
         return instance
 
-    def _deserialize(self, serialized_obj, instance, field_name):
+    def _deserialize(self, serialized_obj, instance, field_name, context):
+        self.update_context(context)
         if not self.follow_object:
             return self.deserialize(serialized_obj, instance)
         else:

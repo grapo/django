@@ -22,8 +22,12 @@ class Serializer(native.ModelSerializer):
     fields = FieldsSerializer(follow_object=False)
 
     def __init__(self, label=None, follow_object=True, **kwargs):
-        super(Serializer, self).__init__(label, follow_object)
-        # should this be rewrited?
+        opts = {}
+        for option in ['fields', 'exclude']:
+            if option in kwargs:
+                opts[option] = kwargs.pop(option)
+        super(Serializer, self).__init__(label, follow_object, **kwargs)
+        kwargs.update(opts)
         self.base_fields['fields'].opts = native.make_options(self.base_fields['fields']._meta, **kwargs)
         
     class Meta:
