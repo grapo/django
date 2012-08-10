@@ -109,7 +109,8 @@ class Serializer(native.ModelSerializer):
 
 class NativeFormat(base.NativeFormat):
     def indent(self, xml, level):
-        xml.ignorableWhitespace('\n' + ' ' * 4 * level)
+        if self.options.get('indent', None) is not None:
+            xml.ignorableWhitespace('\n' + ' ' * self.options.get('indent', None) * level)
     
     def serialize_objects(self, obj):
         xml = SimplerXMLGenerator(self.stream, settings.DEFAULT_CHARSET)
