@@ -4,7 +4,7 @@ from .models import Article
 
 
 class ShortField(Field):
-    def serialize_value(self, obj):
+    def serialize_object(self, obj):
         return getattr(obj, 'headline')[:10]
 
     def set_object(self, obj, instance, field_name):
@@ -12,7 +12,7 @@ class ShortField(Field):
 
 
 class NewField(Field):
-    def serialize_value(self, obj):
+    def serialize_object(self, obj):
         return "New field"
     
     def set_object(self, obj, instance, field_name):

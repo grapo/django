@@ -71,8 +71,23 @@ class SerializerRegistrationTests(unittest.TestCase):
 class NativeSerializersTests(TestCase):
     @staticmethod
     def _validate_output(serial_python):
-        return isinstance(serial_python, dict)
+        return isinstance(serial_python, (dict, list))
     
+    def unpack_object(self, obj):
+        if hasattr(obj, 'get_object'):
+            obj = obj.get_object()
+        else:
+            return obj
+        if isinstance(obj, dict):
+            for key in obj.keys():
+                obj[key] = self.unpack_object(obj[key])
+            return obj
+        elif hasattr(obj, '__iter__'):
+            return [self.npack_object(o) for o in obj]
+        else:
+            return obj
+
+
     def setUp(self):
         sports = Category.objects.create(name="Sports")
         music = Category.objects.create(name="Music")
@@ -115,6 +130,7 @@ class NativeSerializersTests(TestCase):
         serializer = ArticleSerializer()
         serial_python = serializer.serialize(self.a1)
 
+        serial_python = self.unpack_object(serial_python) 
         self.assertEqual(serial_python['headline'], self.a1.headline)
         self.assertEqual(serial_python['pub_date'], self.a1.pub_date)
         
@@ -127,6 +143,7 @@ class NativeSerializersTests(TestCase):
         """Tests that serializer serialized custom fields"""
         serializer = CustomFieldsSerializer()
         serial_python = serializer.serialize(self.a1)
+        serial_python = self.unpack_object(serial_python) 
         self.assertEqual(serial_python['short_headline'], self.a1.headline[:10])
         self.assertEqual(serial_python['new_field'], "New field")
         
@@ -140,6 +157,7 @@ class NativeSerializersTests(TestCase):
         serializer = LabelSerializer()
         serial_python = serializer.serialize(self.a1)
         
+        serial_python = self.unpack_object(serial_python) 
         self.assertTrue(serial_python.has_key("title"))
         self.assertFalse(serial_python.has_key("headline"))
         self.assertEqual(serial_python['title'], self.a1.headline)
@@ -153,8 +171,9 @@ class NativeSerializersTests(TestCase):
         """Tests that serializer serialized attribute field"""
         serializer = AttributeSerializer()
         serial_python = serializer.serialize(self.a1)
-        self.assertTrue("pub_date" in serializer.metadata({})['attributes'])
+        self.assertTrue("pub_date" in serial_python.metadata['attributes'])
         
+        serial_python = self.unpack_object(serial_python) 
         article = serializer.deserialize(serial_python)
         
         self.assertEqual(article.pub_date, self.a1.pub_date)
