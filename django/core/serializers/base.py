@@ -237,13 +237,17 @@ class DeserializedObject(object):
     (and not touch the many-to-many stuff.)
     """
 
-    def __init__(self, obj=None, m2m_data=None, ModelClass=None):
+    def __init__(self, obj=None, m2m_data=None, fk_data=None, ModelClass=None):
         self.object = obj
         self.ModelClass = ModelClass
         self.instance_dict = {}
         if m2m_data == None:
             m2m_data = {} # possible backward incompatibility
         self.m2m_data = m2m_data
+        
+        if fk_data == None:
+            fk_data = {} 
+        self.fk_data = fk_data
     
     def make_instance(self):
         self.object = self.ModelClass(**self.instance_dict)
@@ -257,6 +261,11 @@ class DeserializedObject(object):
                 self.ModelClass._meta.app_label, self.ModelClass._meta.object_name)
 
     def save(self, save_m2m=True, using=None):
+        
+        for field_name, obj in self.fk_data.iteritems():
+            obj.save()
+            setattr(self.object, field_name, obj.object)
+
         # Call save on the Model baseclass directly. This bypasses any
         # model-defined save. The save is also forced to be raw.
         # This ensures that the data that is deserialized is literally
@@ -265,7 +274,15 @@ class DeserializedObject(object):
         models.Model.save_base(self.object, using=using, raw=True)
         if self.m2m_data and save_m2m:
             for accessor_name, object_list in self.m2m_data.items():
-                setattr(self.object, accessor_name, object_list)
+                new_object_list = []
+                for object in object_list:
+                    if isinstance(object, DeserializedObject):
+                        object.save()
+                        new_object_list.append(object.object)
+                    else:
+                        new_object_list.append(object)
+
+                setattr(self.object, accessor_name, new_object_list)
 
         # prevent a second (possibly accidental) call to save() from saving
         # the m2m data twice.

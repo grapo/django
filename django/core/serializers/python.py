@@ -7,32 +7,11 @@ other serializers.
 
 from django.core.serializers import native
 from django.core.serializers import base
-from django.core.serializers import field
 
 
-class FieldsSerializer(native.ModelSerializer):
-    pass
 
-
-class Serializer(native.ModelSerializer):
+class Serializer(native.DumpdataSerializer):
     internal_use_only = True
-    
-    pk = field.PrimaryKeyField()
-    model = field.ModelNameField() 
-    fields = FieldsSerializer(follow_object=False)
-
-    def __init__(self, label=None, follow_object=True, **kwargs):
-        opts = {}
-        for option in ['fields', 'exclude']:
-            if option in kwargs:
-                opts[option] = kwargs.pop(option)
-        super(Serializer, self).__init__(label, follow_object, **kwargs)
-        kwargs.update(opts)
-        self.base_fields['fields'].opts = native.make_options(self.base_fields['fields']._meta, **kwargs)
-        
-    class Meta:
-        fields = ()
-        class_name = "model"
 
 
 def unpack_object(obj):

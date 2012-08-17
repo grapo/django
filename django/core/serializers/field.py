@@ -219,6 +219,8 @@ class M2mField(RelatedField):
 
     def deserialize_iterable(self, obj, field):
         rf = self.related_field(**self.context)
+        if not isinstance(rf, Field):
+            field = None
         for o in obj:
             yield rf.deserialize(o, field)
     

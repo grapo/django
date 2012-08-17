@@ -15,33 +15,13 @@ from django.utils.timezone import is_aware
 
 from django.core.serializers import native
 from django.core.serializers import base
-from django.core.serializers import field
 from django.core.serializers.utils import ObjectWithMetadata
 
 
 
-class FieldsSerializer(native.ModelSerializer):
+
+class Serializer(native.DumpdataSerializer):
     pass
-
-
-class Serializer(native.ModelSerializer):
-    internal_use_only = False
-    
-    pk = field.PrimaryKeyField()
-    model = field.ModelNameField() 
-    fields = FieldsSerializer(follow_object=False)
-
-    def __init__(self, label=None, follow_object=True, **kwargs):
-        opts = {}
-        for option in ['fields', 'exclude']:
-            if option in kwargs:
-                opts[option] = kwargs.pop(option)
-        super(Serializer, self).__init__(label, follow_object, **kwargs)
-        kwargs.update(opts)
-        self.base_fields['fields'].opts = native.make_options(self.base_fields['fields']._meta, **kwargs)
-    class Meta:
-        fields = ()
-        class_name = "model"
 
 
 def unpack_object(obj):

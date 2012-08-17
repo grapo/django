@@ -16,7 +16,7 @@ from django.utils import unittest
 from .models import (Category, Author, Article, AuthorProfile, Actor, Movie,
     Score, Player, Team)
 from .serializers import (ArticleSerializer, CustomFieldsSerializer, AttributeSerializer,
-        LabelSerializer)
+        LabelSerializer, NestedArticleSerializer)
 
 class SerializerRegistrationTests(unittest.TestCase):
     def setUp(self):
@@ -83,7 +83,7 @@ class NativeSerializersTests(TestCase):
                 obj[key] = self.unpack_object(obj[key])
             return obj
         elif hasattr(obj, '__iter__'):
-            return [self.npack_object(o) for o in obj]
+            return [self.unpack_object(o) for o in obj]
         else:
             return obj
 
@@ -178,6 +178,22 @@ class NativeSerializersTests(TestCase):
         
         self.assertEqual(article.pub_date, self.a1.pub_date)
 
+    def test_nested_fk_serializer(self):
+        """Tests that serializer serialized fk field"""
+        serializer = NestedArticleSerializer()
+        serial_python = serializer.serialize([self.a1])
+
+        serial_python = self.unpack_object(serial_python)
+        id = self.a1.id
+        Category.objects.all().delete()
+        Author.objects.all().delete()
+        Article.objects.all().delete()
+        article = list(serializer.deserialize(serial_python))
+        for obj in article:
+            obj.save()
+        article = Article.objects.get(id=id)
+        self.assertEqual(article.pub_date, self.a1.pub_date)
+        self.assertEqual(article.author.name, self.a1.author.name)
 
 class SerializersTestBase(object):
     @staticmethod
@@ -375,6 +391,23 @@ class SerializersTestBase(object):
             self.assertFalse(obj.object.id)
             obj.save()
         self.assertEqual(Category.objects.all().count(), 4)
+
+    def test_nested_fk_serializer(self):
+        """Tests that serializer serialized fk field"""
+
+        serial_str = serializers.serialize(self.serializer_name, [self.a1], serializer=NestedArticleSerializer)
+        id = self.a1.id
+        Category.objects.all().delete()
+        Author.objects.all().delete()
+        Article.objects.all().delete()
+        print serial_str
+        deserial_objs = list(serializers.deserialize(self.serializer_name,
+                                                     serial_str, deserializer=NestedArticleSerializer))
+        for obj in deserial_objs:
+            obj.save()
+        article = Article.objects.get(id=id)
+        self.assertEqual(article.pub_date, self.a1.pub_date)
+        self.assertEqual(article.author.name, self.a1.author.name)
 
 
 class SerializersTransactionTestBase(object):

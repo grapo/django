@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
-from django.core.serializers import ObjectSerializer, Field
-from .models import Article
+from django.core.serializers import ObjectSerializer, Field, ModelSerializer
+from django.core.serializers.native import DumpdataSerializer
+from django.core.serializers import field
+from .models import Author, Article
 
 
 class ShortField(Field):
@@ -39,3 +41,12 @@ class AttributeSerializer(ArticleSerializer):
     def metadata(self, metadict):
         metadict['attributes'] = ['pub_date']
         return metadict
+
+
+class FieldSerializer(ModelSerializer):
+    author = DumpdataSerializer()
+    categories = field.M2mField(related_field=DumpdataSerializer)
+
+
+class NestedArticleSerializer(DumpdataSerializer):
+    fields = FieldSerializer(follow_object=False)

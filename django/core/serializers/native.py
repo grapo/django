@@ -150,7 +150,7 @@ class BaseModelSerializer(BaseObjectSerializer):
         if not self.follow_object:
             return self.deserialize(serialized_obj, instance)
         else:
-            instance.instance_dict[field_name] =  self.deserialize(serialized_obj)
+            instance.fk_data[field_name] =  self.deserialize(serialized_obj)
             return instance
 
     def deserialize_object(self, serialized_obj, instance):
@@ -180,6 +180,33 @@ class ModelSerializer(BaseModelSerializer):
 
     """
     __metaclass__=ModelSerializerMetaclass
+
+class FieldsSerializer(ModelSerializer):
+    pass
+
+class DumpdataSerializer(ModelSerializer):
+    internal_use_only = False
+    
+    pk = field.PrimaryKeyField()
+    model = field.ModelNameField() 
+    fields = FieldsSerializer(follow_object=False)
+
+    def __init__(self, label=None, follow_object=True, **kwargs):
+        opts = {}
+        for option in ['fields', 'exclude']:
+            if option in kwargs:
+                opts[option] = kwargs.pop(option)
+        super(DumpdataSerializer, self).__init__(label, follow_object, **kwargs)
+        kwargs.update(opts)
+        self.base_fields['fields'].opts =make_options(self.base_fields['fields']._meta, **kwargs)
+        
+    def metadata(self, metadict):
+        metadict['attributes'] = ['pk', 'model']
+        return metadict
+
+    class Meta:
+        fields = ()
+        class_name = "model"
 
 
 def _get_model(model_identifier):

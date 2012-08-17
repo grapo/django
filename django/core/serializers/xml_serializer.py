@@ -86,11 +86,7 @@ class FieldsSerializer(native.ModelSerializer):
        m2m_serializer = M2mWithAttributes
 
 
-class Serializer(native.ModelSerializer):
-    internal_use_only = False
-    
-    pk = field.PrimaryKeyField()
-    model = field.ModelNameField() 
+class Serializer(native.DumpdataSerializer):
     field = FieldsSerializer(follow_object=False)
 
     def __init__(self, label=None, follow_object=True, **kwargs):
@@ -101,14 +97,6 @@ class Serializer(native.ModelSerializer):
         super(Serializer, self).__init__(label, follow_object, **kwargs)
         kwargs.update(opts)
         self.base_fields['field'].opts = native.make_options(self.base_fields['field']._meta, **kwargs)
-        
-    def metadata(self, metadict):
-        metadict['attributes'] = ['pk', 'model']
-        return metadict
-
-    class Meta:
-        fields = ()
-        class_name = "model"
 
 
 class NativeFormat(base.NativeFormat):
