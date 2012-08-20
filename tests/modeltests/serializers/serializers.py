@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from django.core.serializers import ObjectSerializer, Field, ModelSerializer
+from django.core.serializers import ModelSerializer, Field, ModelSerializer
 from django.core.serializers.native import DumpdataSerializer
 from django.core.serializers import field
 from .models import Author, Article
@@ -21,7 +21,7 @@ class NewField(Field):
         pass
     
 
-class ArticleSerializer(ObjectSerializer):
+class ArticleSerializer(ModelSerializer):
     class Meta:
         class_name=Article
 

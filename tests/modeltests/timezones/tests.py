@@ -493,7 +493,7 @@ class SerializationTests(TestCase):
     def test_naive_datetime(self):
         dt = datetime.datetime(2011, 9, 1, 13, 20, 30)
 
-        data = serializers.serialize('python', [Event(dt=dt)])
+        data = list(serializers.serialize('python', [Event(dt=dt)]))
         self.assertEqual(data[0]['fields']['dt'], dt)
         obj = next(serializers.deserialize('python', data)).object
         self.assertEqual(obj.dt, dt)
@@ -517,7 +517,7 @@ class SerializationTests(TestCase):
     def test_naive_datetime_with_microsecond(self):
         dt = datetime.datetime(2011, 9, 1, 13, 20, 30, 405060)
 
-        data = serializers.serialize('python', [Event(dt=dt)])
+        data = list(serializers.serialize('python', [Event(dt=dt)]))
         self.assertEqual(data[0]['fields']['dt'], dt)
         obj = next(serializers.deserialize('python', data)).object
         self.assertEqual(obj.dt, dt)
@@ -541,7 +541,7 @@ class SerializationTests(TestCase):
     def test_aware_datetime_with_microsecond(self):
         dt = datetime.datetime(2011, 9, 1, 17, 20, 30, 405060, tzinfo=ICT)
 
-        data = serializers.serialize('python', [Event(dt=dt)])
+        data = list(serializers.serialize('python', [Event(dt=dt)]))
         self.assertEqual(data[0]['fields']['dt'], dt)
         obj = next(serializers.deserialize('python', data)).object
         self.assertEqual(obj.dt, dt)
@@ -565,7 +565,7 @@ class SerializationTests(TestCase):
     def test_aware_datetime_in_utc(self):
         dt = datetime.datetime(2011, 9, 1, 10, 20, 30, tzinfo=UTC)
 
-        data = serializers.serialize('python', [Event(dt=dt)])
+        data = list(serializers.serialize('python', [Event(dt=dt)]))
         self.assertEqual(data[0]['fields']['dt'], dt)
         obj = next(serializers.deserialize('python', data)).object
         self.assertEqual(obj.dt, dt)
@@ -589,7 +589,7 @@ class SerializationTests(TestCase):
     def test_aware_datetime_in_local_timezone(self):
         dt = datetime.datetime(2011, 9, 1, 13, 20, 30, tzinfo=EAT)
 
-        data = serializers.serialize('python', [Event(dt=dt)])
+        data = list(serializers.serialize('python', [Event(dt=dt)]))
         self.assertEqual(data[0]['fields']['dt'], dt)
         obj = next(serializers.deserialize('python', data)).object
         self.assertEqual(obj.dt, dt)
@@ -613,7 +613,7 @@ class SerializationTests(TestCase):
     def test_aware_datetime_in_other_timezone(self):
         dt = datetime.datetime(2011, 9, 1, 17, 20, 30, tzinfo=ICT)
 
-        data = serializers.serialize('python', [Event(dt=dt)])
+        data = list(serializers.serialize('python', [Event(dt=dt)]))
         self.assertEqual(data[0]['fields']['dt'], dt)
         obj = next(serializers.deserialize('python', data)).object
         self.assertEqual(obj.dt, dt)

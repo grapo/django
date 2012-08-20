@@ -136,8 +136,8 @@ class NativeSerializersTests(TestCase):
         
         article = serializer.deserialize(serial_python)
         
-        self.assertEqual(article.headline, self.a1.headline)
-        self.assertEqual(article.pub_date, self.a1.pub_date)
+        self.assertEqual(article.object.headline, self.a1.headline)
+        self.assertEqual(article.object.pub_date, self.a1.pub_date)
 
     def test_custom_fields_serializer(self):
         """Tests that serializer serialized custom fields"""
@@ -169,7 +169,7 @@ class NativeSerializersTests(TestCase):
 
     def test_attribute_serializer(self):
         """Tests that serializer serialized attribute field"""
-        serializer = AttributeSerializer()
+        serializer = AttributeSerializer(use_metadata=True)
         serial_python = serializer.serialize(self.a1)
         self.assertTrue("pub_date" in serial_python.metadata['attributes'])
         
@@ -394,13 +394,13 @@ class SerializersTestBase(object):
 
     def test_nested_fk_serializer(self):
         """Tests that serializer serialized fk field"""
-
+        if self.serializer_name == 'xml':
+            return
         serial_str = serializers.serialize(self.serializer_name, [self.a1], serializer=NestedArticleSerializer)
         id = self.a1.id
         Category.objects.all().delete()
         Author.objects.all().delete()
         Article.objects.all().delete()
-        print serial_str
         deserial_objs = list(serializers.deserialize(self.serializer_name,
                                                      serial_str, deserializer=NestedArticleSerializer))
         for obj in deserial_objs:
