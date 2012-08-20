@@ -17,7 +17,7 @@ def make_options(meta, **kwargs):
         if attr:
             setattr(options, name, attr)
         value = getattr(options, name)
-        if inspect.isclass(value) and issubclass(value, base.Serializer):
+        if inspect.isclass(value) and issubclass(value, base.NativeSerializer):
             setattr(options, name, value())
     return options
 
@@ -26,33 +26,36 @@ class ObjectSerializerOptions(object):
     def __init__(self, options=None):
         self.fields = getattr(options, 'fields', None)
         self.exclude = getattr(options, 'exclude', None)
-        self.related_serializer = getattr(options, 'related_serializer', None)
         self.field_serializer = getattr(options, 'field_serializer', field.Field)
         self.related_reserialize = getattr(options, 'related_reserialize', None)
         self.class_name = getattr(options, 'class_name', None)
 
 
-class ObjectSerializerMetaclass(base.SerializerMetaclass):
+class ObjectSerializerMetaclass(base.NativeSerializerMetaclass):
     def __new__(cls, name, bases, attrs):
         new_class = super(ObjectSerializerMetaclass, cls).__new__(cls, name, bases, attrs)
         new_class._meta = ObjectSerializerOptions(getattr(new_class, 'Meta', None))
         return new_class
 
 
-class BaseObjectSerializer(base.Serializer):
+class BaseObjectSerializer(base.NativeSerializer):
     """
-    Base class for serializing Python objects.
+    Base class for serializiation and deserialization Python objects.
     """
     def __init__(self, label=None, follow_object=True, **kwargs):
         opts = {}
         for option in ['fields', 'exclude']:
             if option in kwargs:
                 opts[option] = kwargs.pop(option)
-            
-        super(BaseObjectSerializer, self).__init__(label, follow_object, **kwargs)
-        
+
         # possibility to override options when class is instantiated
         self.opts = make_options(self._meta, **opts)
+
+        super(BaseObjectSerializer, self).__init__(label, follow_object, **kwargs)
+
+    def update_context(self, context):
+        super(BaseObjectSerializer, self).update_context(context)
+        self.opts.field_serializer.update_context(context)
 
     def get_object_field_serializer(self, obj, field_name):
         return self.opts.field_serializer
@@ -80,7 +83,7 @@ class BaseObjectSerializer(base.Serializer):
 
         declared_fields_copy = declared_fields.copy()
         declared_fields_copy.update(fields)
-        if self.opts.fields: # ordering must be like in self.opts.fields
+        if self.opts.fields:  # ordering must be like in self.opts.fields
             serializable_fields = SortedDict()
             for name in self.opts.fields:
                 item = declared_fields_copy.pop(name)
@@ -89,7 +92,7 @@ class BaseObjectSerializer(base.Serializer):
                 serializable_fields[name] = item
             serializable_fields.update(declared_fields_copy)
             return serializable_fields
-        else: # declared first
+        else:  # declared first
             return declared_fields_copy
 
     def create_instance(self, serialized_obj):
@@ -102,19 +105,16 @@ class ObjectSerializer(BaseObjectSerializer):
     __metaclass__ = ObjectSerializerMetaclass
 
 
-class ModelSerializerOptions(object):
+class ModelSerializerOptions(ObjectSerializerOptions):
     def __init__(self, options=None):
-        self.fields = getattr(options, 'fields', None)
-        self.exclude = getattr(options, 'exclude', None)
+        super(ModelSerializerOptions, self).__init__(options=options)
         self.related_serializer = getattr(options, 'related_serializer', field.RelatedField)
         self.m2m_serializer = getattr(options, 'm2m_serializer', field.M2mField)
         self.field_serializer = getattr(options, 'field_serializer', field.ModelField)
         self.related_reserialize = getattr(options, 'related_reserialize', None)
-        self.use_natural_keys = getattr(options, 'use_natural_keys', False)
-        self.class_name = getattr(options, 'class_name', None)
 
 
-class ModelSerializerMetaclass(base.SerializerMetaclass):
+class ModelSerializerMetaclass(base.NativeSerializerMetaclass):
     def __new__(cls, name, bases, attrs):
         new_class = super(ModelSerializerMetaclass, cls).__new__(cls, name, bases, attrs)
         new_class._meta = ModelSerializerOptions(getattr(new_class, 'Meta', None))
@@ -122,6 +122,15 @@ class ModelSerializerMetaclass(base.SerializerMetaclass):
 
 
 class BaseModelSerializer(BaseObjectSerializer):
+    """
+    Base class for serializiation and deserialization Django models.
+    """
+
+    def update_context(self, context):
+        super(BaseModelSerializer, self).update_context(context)
+        self.opts.related_serializer.update_context(context)
+        self.opts.m2m_serializer.update_context(context)
+
     def get_object_field_serializer(self, obj, field_name):
         field, model, direct, m2m = obj._meta.get_field_by_name(field_name)
         if m2m:
@@ -133,24 +142,23 @@ class BaseModelSerializer(BaseObjectSerializer):
             return self.opts.related_serializer
         else:
             return self.opts.field_serializer
-    
+
     def get_object_fields_names(self, obj):
         concrete_model = obj._meta.concrete_model
         names = []
         names.extend([field.name for field in concrete_model._meta.local_fields if field.serialize])
         names.extend([field.name for field in concrete_model._meta.many_to_many if field.serialize])
         return names
-    
+
     def get_deserializable_fields_for_object(self, obj):
         return self.get_fields_for_object(obj.ModelClass)
 
-    def _deserialize(self, serialized_obj, instance, field_name, context):
-        self.update_context(context)
+    def _deserialize(self, serialized_obj, instance, field_name):
         # instance is of DeserializedObject type
         if not self.follow_object:
             return self.deserialize(serialized_obj, instance)
         else:
-            instance.fk_data[field_name] =  self.deserialize(serialized_obj)
+            instance.fk_data[field_name] = self.deserialize(serialized_obj)
             return instance
 
     def deserialize_object(self, serialized_obj, instance):
@@ -164,7 +172,7 @@ class BaseModelSerializer(BaseObjectSerializer):
             return base.DeserializedObject(ModelClass=self.create_instance(obj))
         else:
             return instance
-    
+
     def create_instance(self, serialized_obj):
         if self.opts.class_name is not None:
             if isinstance(self.opts.class_name, str):
@@ -177,29 +185,32 @@ class BaseModelSerializer(BaseObjectSerializer):
 class ModelSerializer(BaseModelSerializer):
     """
     Class for serializing Django models.
-
     """
-    __metaclass__=ModelSerializerMetaclass
+    __metaclass__ = ModelSerializerMetaclass
+
 
 class FieldsSerializer(ModelSerializer):
     pass
 
+
 class DumpdataSerializer(ModelSerializer):
-    internal_use_only = False
-    
+    """
+    Dumpdata backward compatibile class for serialization and deserialization
+    Django objects
+    """
+
     pk = field.PrimaryKeyField()
-    model = field.ModelNameField() 
+    model = field.ModelNameField()
     fields = FieldsSerializer(follow_object=False)
 
     def __init__(self, label=None, follow_object=True, **kwargs):
-        opts = {}
-        for option in ['fields', 'exclude']:
-            if option in kwargs:
-                opts[option] = kwargs.pop(option)
+        include_fields = kwargs.pop('fields', None)
+        exclude = kwargs.pop('exclude', None)
         super(DumpdataSerializer, self).__init__(label, follow_object, **kwargs)
-        kwargs.update(opts)
-        self.base_fields['fields'].opts =make_options(self.base_fields['fields']._meta, **kwargs)
-        
+        fields = self.base_fields['fields']
+        fields.opts.fields = include_fields or fields._meta.fields
+        fields.opts.exclude = exclude or fields._meta.fields
+
     def metadata(self, metadict):
         metadict['attributes'] = ['pk', 'model']
         return metadict

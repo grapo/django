@@ -18,7 +18,7 @@ To add your own serializers, use the SERIALIZATION_MODULES setting::
 
 from django.conf import settings
 from django.utils import importlib
-from django.core.serializers.base import SerializerDoesNotExist
+from django.core.serializers.base import SerializerDoesNotExist, Serializer
 from django.core.serializers.field import Field
 from django.core.serializers.native import ModelSerializer, ObjectSerializer
 
@@ -27,7 +27,7 @@ __all__= ['Field', 'ModelSerializer', 'ObjectSerializer']
 # Built-in serializers
 BUILTIN_SERIALIZERS = {
     "xml"    : "django.core.serializers.xml_serializer",
-    "new_xml"    : "django.core.serializers.new_xml_serializer",
+    "new_xml": "django.core.serializers.new_xml_serializer",
     "python" : "django.core.serializers.python",
     "json"   : "django.core.serializers.json",
 }
@@ -86,7 +86,7 @@ def get_format_serializer(format):
         _load_serializers()
     if format not in _serializers:
         raise SerializerDoesNotExist(format)
-    return _serializers[format].NativeFormat
+    return _serializers[format].FormatSerializer
 
 
 def get_serializer_formats():
@@ -106,7 +106,8 @@ def get_deserializer(format):
         _load_serializers()
     if format not in _serializers:
         raise SerializerDoesNotExist(format)
-    return _serializers[format].Serializer
+    return _serializers[format].Deserializer
+
 
 def serialize(format, queryset, serializer=None, **options):
     """
@@ -114,13 +115,17 @@ def serialize(format, queryset, serializer=None, **options):
     a certain serializer.
     """
     if serializer is None:
-        s = get_serializer(format)(**options)
+        s = get_serializer(format)()
     else:
-        s = serializer(**options)
-    format_serializer = get_format_serializer(format)()
-    
-    native_objs = s.serialize(queryset)
-    return format_serializer.serialize(native_objs, **options)
+        s = build_serializer(serializer, format, **options)()
+    return s.serialize(queryset, **options)
+
+
+def build_serializer(serializer, format, **options):
+    format_serializer = get_format_serializer(format)
+    CustomSerializer = type(serializer.__name__ + 'Serializer', (Serializer, ), {'SerializerClass': serializer,
+                                                                            'RendererClass' : format_serializer})
+    return CustomSerializer
 
 
 def deserialize(format, stream_or_string, deserializer=None, **options):
@@ -131,12 +136,10 @@ def deserialize(format, stream_or_string, deserializer=None, **options):
     list_of_related_objects}``.
     """
     if deserializer is None:
-        d = get_serializer(format)(**options)
+        d = get_deserializer(format)()
     else:
-        d = deserializer(**options)
-    format_deserializer = get_format_serializer(format)()
-    native_objs = format_deserializer.deserialize(stream_or_string, **options)
-    return d.deserialize(native_objs)
+        d = build_serializer(deserializer, format, **options)()
+    return d.deserialize(stream_or_string, **options)
 
 
 def _load_serializers():

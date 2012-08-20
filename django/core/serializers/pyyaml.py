@@ -37,11 +37,11 @@ DjangoSafeDumper.add_representer(types.GeneratorType, yaml.representer.SafeRepre
 DjangoSafeDumper.add_representer(SortedDict, yaml.representer.SafeRepresenter.represent_dict)
 
 
-class Serializer(native.DumpdataSerializer):
+class NativeSerializer(native.DumpdataSerializer):
     pass
 
 
-class NativeFormat(base.NativeFormat):
+class FormatSerializer(base.FormatSerializer):
     def serialize_objects(self, obj):
         yaml.dump(obj, self.stream, Dumper=DjangoSafeDumper, **self.options)
 
@@ -56,3 +56,11 @@ class NativeFormat(base.NativeFormat):
             return yaml.safe_load(stream)
         except Exception, e:
             raise base.DeserializationError(e)
+
+
+class Serializer(base.Serializer):
+    SerializerClass = NativeSerializer
+    RendererClass = FormatSerializer
+
+
+Deserializer = Serializer

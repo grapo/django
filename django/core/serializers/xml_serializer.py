@@ -33,13 +33,6 @@ class ModelWithAttributes(field.ModelField):
         metadict['attributes'] = ['type', 'name']
         return metadict
 
-    def get_object(self, obj, field_name):
-        field = obj._meta.get_field_by_name(field_name)[0]
-        if getattr(obj, field_name) is not None:
-            return field.value_to_string(obj)
-        else:
-            return None
-
 
 class RelField(field.Field):
     def get_object(self, obj, field_name):
@@ -62,12 +55,6 @@ class RelatedWithAttributes(field.RelatedField):
         metadict['attributes'] = ['name', 'rel', 'to']
         return metadict
 
-    def serialize_object(self, obj):
-        if obj is not None:
-            return smart_unicode(obj)
-        else:
-            return obj
-
 
 class M2mWithAttributes(field.M2mField):
     name = NameField() 
@@ -86,20 +73,18 @@ class FieldsSerializer(native.ModelSerializer):
        m2m_serializer = M2mWithAttributes
 
 
-class Serializer(native.DumpdataSerializer):
-    field = FieldsSerializer(follow_object=False)
-
-    def __init__(self, label=None, follow_object=True, **kwargs):
-        opts = {}
-        for option in ['fields', 'exclude']:
-            if option in kwargs:
-                opts[option] = kwargs.pop(option)
-        super(Serializer, self).__init__(label, follow_object, **kwargs)
-        kwargs.update(opts)
-        self.base_fields['field'].opts = native.make_options(self.base_fields['field']._meta, **kwargs)
+class NativeSerializer(native.DumpdataSerializer):
+    fields = FieldsSerializer(label="field", follow_object=False)
 
 
-class NativeFormat(base.NativeFormat):
+class FormatSerializer(base.FormatSerializer):
+    def get_context(self):
+        return {
+                'text_only' : True,
+                'use_metadata' : True,
+                'ordered_fields' :  True,
+        }
+
     def indent(self, xml, level):
         if self.options.get('indent', None) is not None:
             xml.ignorableWhitespace('\n' + ' ' * self.options.get('indent', None) * level)
@@ -333,3 +318,11 @@ class NativeFormat(base.NativeFormat):
     def _de_handle_natural_keys(self, node, event_stream):
         event, node = event_stream.next()
         return node.text
+
+
+class Serializer(base.Serializer):
+    SerializerClass = NativeSerializer
+    RendererClass = FormatSerializer
+
+
+Deserializer = Serializer

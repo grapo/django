@@ -6,8 +6,10 @@ import datetime
 from io import BytesIO
 from decimal import Decimal
 
+from django.db import DEFAULT_DB_ALIAS
 from django.utils.datastructures import SortedDict
 from django.db import models
+from django.conf import settings
 from django.core.serializers.utils import ObjectWithMetadata
 
 
@@ -51,7 +53,7 @@ def get_declared_fields(bases, attrs):
     Create a list of serializer field instances from the passed in 'attrs', plus any
     similar fields on the base classes (in 'bases').
     """
-    fields = [(field_name, attrs.pop(field_name)) for field_name, obj in attrs.items() if isinstance(obj, (BaseSerializer))]
+    fields = [(field_name, attrs.pop(field_name)) for field_name, obj in attrs.items() if isinstance(obj, (BaseNativeSerializer))]
     fields.sort(key=lambda x: x[1].creation_counter)
 
     # If this class is subclassing another Serializer, add that Serializer's fields.
@@ -64,32 +66,52 @@ def get_declared_fields(bases, attrs):
     return SortedDict(fields)
 
 
-class SerializerMetaclass(type):
+class NativeSerializerMetaclass(type):
     """
     Metaclass that converts Serializer attributes to a dictionary called
     'base_fields', taking into account parent class 'base_fields' as well.
     """
     def __new__(cls, name, bases, attrs):
         attrs['base_fields'] = get_declared_fields(bases, attrs)
-        new_class = super(SerializerMetaclass,
+        new_class = super(NativeSerializerMetaclass,
                      cls).__new__(cls, name, bases, attrs)
 
         return new_class
 
 
-class BaseSerializer(object):
+class ContextOptions(object):
+    """
+    Options that can be set in runtime. Their are recursively set for all
+    NativeSerializers in base fields.
+    """
+    def __init__(self, options):
+        self.using = options.get('using', DEFAULT_DB_ALIAS)
+        self.use_natural_keys = options.get('use_natural_keys', False)
+        self.text_only = options.get('text_only', False)
+        self.use_metadata = options.get('use_metadata', False)
+        self.ordered_fields = options.get('ordered_fields', False)
+        self.encoding = options.get('encoding', settings.DEFAULT_CHARSET)
+
+
+class BaseNativeSerializer(object):
     creation_counter = 0
+    _context_options = ContextOptions
 
     def __init__(self, label=None, follow_object=True, **kwargs):
         self.label = label
         self.follow_object = follow_object
-        self.context = kwargs 
+        self.update_context(kwargs)
         # Increase the creation counter, and save our local copy.
-        self.creation_counter = BaseSerializer.creation_counter
-        BaseSerializer.creation_counter += 1
+        self.creation_counter = BaseNativeSerializer.creation_counter
+        BaseNativeSerializer.creation_counter += 1
 
     def update_context(self, context):
-        self.context = context
+        """
+        Updates context for this serialization or deserialization run
+        """
+        self.context = self._context_options(context)
+        for field in self.base_fields.itervalues():
+            field.update_context(context)
 
     def get_object(self, obj, field_name=None):
         """
@@ -119,66 +141,84 @@ class BaseSerializer(object):
         """
         return metadict
 
-    def _serialize(self, obj, field_name, context):
-        self.update_context(context)
+    def _serialize(self, obj, field_name):
         new_obj = self.get_object(obj, field_name)
-        return  self.serialize(new_obj)
+        return self.serialize(new_obj)
 
     def serialize_iterable(self, obj):
+        """
+        Serializes iterable objects
+        """
         for o in obj:
-            yield self.serialize(o) 
+            yield self.serialize(o)
 
     def serialize(self, obj):
+        """
+        Main entry for native serialization. Returns serialized object
+        For usability reasons this methods is made from two methods
+        serialize_iterable nad serialize_object.
+        """
         if not isinstance(obj, collections.Mapping) and hasattr(obj, '__iter__'):
             serialized_obj = self.serialize_iterable(obj)
         else:
             serialized_obj = self.serialize_object(obj)
-        
-        return ObjectWithMetadata(serialized_obj, self.get_metadata())
-    
+
+        if self.context.use_metadata:
+            return ObjectWithMetadata(serialized_obj, self.get_metadata())
+        else:
+            return serialized_obj
+
     def serialize_object(self, obj):
         """
         Serializes given object.
         """
         fields = self.get_fields_for_object(obj)
 
-        native = {}
+        if self.context.ordered_fields:
+            # for byte compatibility in serializers
+            native = SortedDict()
+        else:
+            native = {}
+
         for field_name, serializer in fields.iteritems():
-            nativ_obj = serializer._serialize(obj, field_name, self.context)
+            nativ_obj = serializer._serialize(obj, field_name)
             if serializer.label:
                 field_name = serializer.label
             native[field_name] = nativ_obj
         return native
 
-    def get_deserializable_fields_for_object(self, obj): # ugly - how to fix this?
+    def get_deserializable_fields_for_object(self, obj):
+        """
+        Returns object fields that should be deserialized
+        """
         return self.get_fields_for_object(obj)
 
-    
     def deserialize(self, serialized_obj, instance=None):
+        """
+        Main entry for native deserialization. Returns deserialized object
+        """
         if not isinstance(serialized_obj, collections.Mapping) and hasattr(serialized_obj, '__iter__'):
             return self.deserialize_iterable(serialized_obj)
         else:
             instance = self._get_instance(serialized_obj, instance)
             return self.deserialize_object(serialized_obj, instance)
-    
+
     def deserialize_iterable(self, obj):
         for o in obj:
-            yield self.deserialize(o) 
-    
+            yield self.deserialize(o)
+
     def deserialize_object(self, serialized_obj, instance):
         """
         Deserializes object from give python native datatype.
         """
         fields = self.get_deserializable_fields_for_object(instance)
-
         for subfield_name, serializer in fields.iteritems():
             serialized_name = serializer.label if serializer.label is not None else subfield_name
             if serialized_name in serialized_obj:
-                instance = serializer._deserialize(serialized_obj[serialized_name], instance, subfield_name, self.context)
+                instance = serializer._deserialize(serialized_obj[serialized_name], instance, subfield_name)
         return instance
 
-    def _deserialize(self, serialized_obj, instance, field_name, context):
-        self.update_context(context)
+    def _deserialize(self, serialized_obj, instance, field_name):
         if not self.follow_object:
             return self.deserialize(serialized_obj, instance)
         else:
@@ -198,11 +238,16 @@ class BaseSerializer(object):
         raise NotImplementedError()
 
 
-class Serializer(BaseSerializer):
-    __metaclass__ = SerializerMetaclass
+class NativeSerializer(BaseNativeSerializer):
+    __metaclass__ = NativeSerializerMetaclass
 
 
-class NativeFormat(object):
+class FormatSerializer(object):
+    """
+    Class for serialization from native python datatypes to
+    specific format and for deserialization from specific format
+    to native python datatypes
+    """
     def serialize(self, objects, **options):
         self.stream = options.pop("stream", BytesIO())
         options.pop('fields', None)
@@ -211,6 +256,12 @@ class NativeFormat(object):
         self.serialize_objects(objects)
         return self.getvalue()
 
+    def serialize_objects(self, objects):
+        return objects
+
+    def deserialize_stream(self, stream):
+        return stream
+
     def getvalue(self):
         """
         Return the fully serialized queryset (or None if the output stream is
@@ -218,11 +269,46 @@ class NativeFormat(object):
         """
         if callable(getattr(self.stream, 'getvalue', None)):
             return self.stream.getvalue()
-    
+
+    def get_context(self):
+        """
+        Returns context that can be useful in native serialization/deserialization
+        """
+        return {}
+
     def deserialize(self, stream, **options):
         self.options = options
         models.get_apps()
         return self.deserialize_stream(stream)
+
+
+class Serializer(object):
+    """
+    Class for backward compatibility that handles
+    the whole process of serialization and deserialization
+    """
+    internal_use_only = False
+    # class for native python serialization/deserialization
+    SerializerClass = NativeSerializer
+    # class for specific format serialization/deserialization
+    RendererClass = FormatSerializer
+
+    def serialize(self, queryset, **options):
+        renderer = self.RendererClass()
+        context = renderer.get_context()
+        context.update(options)
+        serializer = self.SerializerClass(**context)
+        native_objs = serializer.serialize(queryset)
+        return renderer.serialize(native_objs, **options)
+
+    def deserialize(self, stream_or_string, **options):
+        renderer = self.RendererClass()
+        context = renderer.get_context()
+        context.update(options)
+        serializer = self.SerializerClass(**context)
+
+        native_objs = renderer.deserialize(stream_or_string, **options)
+        return serializer.deserialize(native_objs)
 
 
 class DeserializedObject(object):
@@ -242,16 +328,19 @@ class DeserializedObject(object):
         self.ModelClass = ModelClass
         self.instance_dict = {}
         if m2m_data == None:
-            m2m_data = {} # possible backward incompatibility
+            m2m_data = {}  # possible backward incompatibility
         self.m2m_data = m2m_data
-        
+
         if fk_data == None:
-            fk_data = {} 
+            fk_data = {}
         self.fk_data = fk_data
-    
+
     def make_instance(self):
+        """
+        Makes model instance from model class and given dict with data
+        """
         self.object = self.ModelClass(**self.instance_dict)
-    
+
     def __repr__(self):
         if self.object is not None:
             return "<DeserializedObject: %s.%s(pk=%s)>" % (
@@ -261,7 +350,7 @@ class DeserializedObject(object):
                 self.ModelClass._meta.app_label, self.ModelClass._meta.object_name)
 
     def save(self, save_m2m=True, using=None):
-        
+
         for field_name, obj in self.fk_data.iteritems():
             obj.save()
             setattr(self.object, field_name, obj.object)

@@ -25,13 +25,6 @@ class ModelWithAttributes(field.ModelField):
         metadict['attributes'] = ['type']
         return metadict
 
-    def get_object(self, obj, field_name):
-        field = obj._meta.get_field_by_name(field_name)[0]
-        if getattr(obj, field_name) is not None:
-            return field.value_to_string(obj)
-        else:
-            return None
-
 
 class RelField(field.Field):
     def get_object(self, obj, field_name):
@@ -53,12 +46,6 @@ class RelatedWithAttributes(field.RelatedField):
         metadict['attributes'] = ['rel', 'to']
         return metadict
 
-    def serialize_object(self, obj):
-        if obj is not None:
-            return smart_unicode(obj)
-        else:
-            return obj
-
 
 class XmlM2mRelatedField(field.M2mRelatedField):
     def serialize_object(self, obj): # get_object from RelatedField won't be called
@@ -74,8 +61,7 @@ class M2mWithAttributes(field.M2mField):
     to = ToField()
 
     def __init__(self, label=None, use_natural_keys=False, related_field=XmlM2mRelatedField):
-        super(M2mWithAttributes, self).__init__(label=label, use_natural_keys=use_natural_keys)
-        self.related_field = related_field
+        super(M2mWithAttributes, self).__init__(label=label, use_natural_keys=use_natural_keys, related_field=related_field)
     
     def metadata(self, metadict):
         metadict['attributes'] = ['rel', 'to']
@@ -89,11 +75,19 @@ class FieldsSerializer(native.ModelSerializer):
        m2m_serializer = M2mWithAttributes
 
 
-class Serializer(native.DumpdataSerializer):
+class NativeSerializer(native.DumpdataSerializer):
     fields = FieldsSerializer(follow_object=False)
 
 
-class NativeFormat(base.NativeFormat):
+class FormatSerializer(base.FormatSerializer):
+
+    def get_context(self):
+        return {
+                'text_only' : True,
+                'use_metadata' : True,
+                'ordered_fields' :  True,
+        }
+
     def indent(self, xml, level):
         if self.options.get('indent', None) is not None:
             xml.ignorableWhitespace('\n' + ' ' * self.options.get('indent', None) * level)
@@ -256,3 +250,11 @@ class NativeFormat(base.NativeFormat):
             if isinstance(data, dict) and node.attrib:
                 data.update(node.attrib)
         return data, node
+
+
+class Serializer(base.Serializer):
+    SerializerClass = NativeSerializer
+    RendererClass = FormatSerializer
+
+
+Deserializer = Serializer

@@ -18,33 +18,15 @@ from django.core.serializers import base
 from django.core.serializers.utils import ObjectWithMetadata
 
 
-
-
-class Serializer(native.DumpdataSerializer):
+class NativeSerializer(native.DumpdataSerializer):
     pass
 
 
-def unpack_object(obj):
-    if hasattr(obj, 'get_object'):
-        obj = obj.get_object()
-    else:
-        return obj
-    if isinstance(obj, dict):
-        for key in obj.keys():
-            obj[key] = unpack_object(obj[key])
-        return obj
-    elif hasattr(obj, '__iter__'):
-        return (unpack_object(o) for o in obj)
-    else:
-        return obj
-
-
-class NativeFormat(base.NativeFormat):
+class FormatSerializer(base.FormatSerializer):
     def serialize_objects(self, obj):
         if json.__version__.split('.') >= ['2', '1', '3']:
             # Use JS strings to represent Python Decimal instances (ticket #16850)
             self.options.update({'use_decimal': False})
-        obj = unpack_object(obj)
         json.dump(obj, self.stream, cls=DjangoJSONEncoder, **self.options)
 
     def deserialize_stream(self, stream_or_string):
@@ -57,6 +39,15 @@ class NativeFormat(base.NativeFormat):
                 return json.load(stream_or_string)
         except Exception, e:
             raise base.DeserializationError(e)
+
+
+class Serializer(base.Serializer):
+    SerializerClass = NativeSerializer
+    RendererClass = FormatSerializer
+
+
+Deserializer = Serializer
+
 
 class DjangoJSONEncoder(json.JSONEncoder):
     """
